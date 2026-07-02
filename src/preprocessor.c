@@ -17,7 +17,7 @@ static bool doInclude(char *buffer, int bufferSize, int *tokenStartIndex, char *
     bool  rc                = false;
     char *singleIncludeName = NULL;
 
-    if (NULL == buffer ||
+    if (NULL == buffer          ||
         NULL == tokenStartIndex ||
         NULL == fileName)
     {
@@ -177,19 +177,94 @@ static bool doInclude(char *buffer, int bufferSize, int *tokenStartIndex, char *
     return rc;
 }
 
-/*
-static bool doDefine()
+static bool doDefine(char *buffer, int bufferSize, int *tokenStartIndex, char *fileName, int line)
 {
+    char         *token          = NULL;
+    definition_t *newDef         = NULL;
+    int           endOfNameToken = 0;
+
+    if (NULL == buffer          ||
+        NULL == tokenStartIndex ||
+        NULL == fileName)
+    {
+        INTERNAL_ERROR;
+        return false;
+    }
+
+    token = getNextTokenFromBuf(buffer, bufferSize, false, tokenStartIndex);
+
+    if (NULL == token)
+    {
+        ERROR(fileName, line, buffer, "no macro name given in #define directive");
+        return false;
+    }
+
+    if (false == isCharForIdent(token[0]) ||
+        ('0' <= token[0] && '9' >= token[0]))
+    {
+        ERROR(fileName, line, buffer, "expected an indentifier");
+        free(token);
+        return false;
+    }
+
+    /*
+    if (NULL != getDefinition(def, token))
+    {
+        ERROR_ARGS(fileName, line, buffer, "\"%s\" redefined", token);
+        free(token);
+        return false;
+    }*/
+
+    newDef = addDefinition(def);
+
+    if (NULL == newDef)
+    {
+        INTERNAL_ERROR;
+        free(token);
+        return false;
+    }
+
+    newDef->name = token;
+
+    endOfNameToken = *tokenStartIndex;
+
+    token = getNextTokenFromBuf(buffer, bufferSize, false, tokenStartIndex);
+
+    if (NULL == token)
+    {
+        // Empty definition, no problem with that!
+        return true;
+    }
+
+    // We don't actually ant the token, we just used it as an indicator of
+    // whether or not there was anything to define
+    free(token);
+
+    while (buffer[endOfNameToken] == ' ' ||
+           buffer[endOfNameToken] == '\t')
+    {
+        endOfNameToken++;
+    }
+
+    // Copy everything else except for the newline at the end of the buffer
+    newDef->expansion = strncpy(calloc(strnlen(&(buffer[endOfNameToken]),
+                                               bufferSize - endOfNameToken - 1),
+                                       sizeof(char)),
+                        &(buffer[endOfNameToken]),
+                       strnlen(&(buffer[endOfNameToken]),
+                               bufferSize - endOfNameToken - 1) - 1);
+
     return true;
-}*/
+}
 
 static bool preprocessFile(FILE *inputFile, char *inputFileName)
 {
-    char  inputBuffer[2048] = {0};
-    int   lineNumber        = 0;
-    int   tokenStartIndex   = 0;
-    char *token             = NULL;
-    bool  success           = true;
+    char          inputBuffer[2048] = {0};
+    int           lineNumber        = 0;
+    int           tokenStartIndex   = 0;
+    char         *token             = NULL;
+    bool          success           = true;
+    definition_t *searchDef         = NULL;
 
     while(fgets(inputBuffer, sizeof(inputBuffer), inputFile))
     {
@@ -221,21 +296,25 @@ static bool preprocessFile(FILE *inputFile, char *inputFileName)
                 if (false == doInclude(inputBuffer,
                                        sizeof(inputBuffer),
                                        &tokenStartIndex,
-                                       inputFileName, lineNumber))
+                                       inputFileName,
+                                       lineNumber))
                 {
                     success = false;
-                    continue;
                 }
             }
             else if (0 == strcmp(PREPRO_DIRECTIVE_DEFINE, token))
             {
-                /*
                 free(token);
-                if (false == doDefine())
+                if (false == doDefine(inputBuffer,
+                                      sizeof(inputBuffer),
+                                      &tokenStartIndex,
+                                      inputFileName,
+                                      lineNumber))
                 {
                     success = false;
-                    continue;
-                }*/
+                }
+
+                fprintf(outputFile, "\n");
             }
             else
             {
@@ -246,14 +325,45 @@ static bool preprocessFile(FILE *inputFile, char *inputFileName)
                            token);
                 free(token);
                 success = false;
-                continue;
             }
 
             continue;
         }
 
-        // Just dump everything else
-        fprintf(outputFile, "%s", inputBuffer);
+        free(token);
+
+        tokenStartIndex = 0;
+
+        while (NULL != (token = getNextTokenFromBuf(inputBuffer,
+                                                    sizeof(inputBuffer),
+                                                    false,
+                                                    &tokenStartIndex)))
+        {
+            // We need to leave a space aftertokens which are identifiers
+            // so something like "static void functionName()" doesn't
+            // become "staticvoidfunctionName()"
+            if (isCharForIdent(token[0]))
+            {
+                if (isCharForIdentNoNum(token[0]))
+                {
+                    searchDef = getDefinition(def, token);
+
+                    if (NULL != searchDef)
+                    {
+                        fprintf(outputFile, "%s ", searchDef->expansion);
+                        continue;
+                    }
+                }
+
+                fprintf(outputFile, "%s ", token);
+                continue;
+            }
+
+            // Just dump everything else
+            fprintf(outputFile, "%s", token);
+        }
+
+        fprintf(outputFile, "\n");
     }
 
     return success;

@@ -50,11 +50,16 @@ bool preprocessor(char *inName, char *outName, includes_t *includes);
 
 // Util
 int  findFirstNonWhitespace(char *buf, int length);
+bool isCharForIdent(char c);
+bool isCharForIdentNoNum(char c);
 char *getNextTokenFromBuf(char *buf, int bufSize, bool tokenizeAngleBrackets, int *startIndex);
 bool isolateFileName(char *in, char **out);
 bool isolateFileNameWithExtension(char *in, char **out);
 bool stringStartsWith(char *str, char c);
 bool stringEndsWith(char *str, char c);
 bool stringWrappedWith(char *str, char c);
+
+definition_t *addDefinition(definitionList_t *list);
+definition_t *getDefinition(definitionList_t *list, char *name);
 
 #endif //__DCC_H__

@@ -32,7 +32,7 @@ static inline bool isCharNumber(char c)
     return '0' <= c && '9' >= c;
 }
 
-static inline bool isCharForVar(char c)
+bool isCharForIdent(char c)
 {
     if ('a' <= c &&
         'z' >= c)
@@ -52,6 +52,23 @@ static inline bool isCharForVar(char c)
     }
 
     return isCharNumber(c);
+}
+
+bool isCharForIdentNoNum(char c)
+{
+    if ('a' <= c &&
+        'z' >= c)
+    {
+        return true;
+    }
+
+    if ('A' <= c &&
+        'Z' >= c)
+    {
+        return true;
+    }
+
+    return '_' == c;
 }
 
 static inline bool isCharWhitespace(char c)
@@ -134,7 +151,7 @@ char *getNextTokenFromBuf(char *buf, int bufSize, bool tokenizeAngleBrackets, in
             {
                 isInAngleBracket = true;
             }
-            else if (false == isCharForVar(buf[i]))
+            else if (false == isCharForIdent(buf[i]))
             {
                 end = i;
                 break;
@@ -193,7 +210,7 @@ char *getNextTokenFromBuf(char *buf, int bufSize, bool tokenizeAngleBrackets, in
         }
 
         if (i != start &&
-            false == isCharForVar(buf[i]))
+            false == isCharForIdent(buf[i]))
         {
             end = i - 1;
             break;
@@ -325,4 +342,52 @@ bool stringWrappedWith(char *str, char c)
     }
 
     return stringStartsWith(str, c) && stringEndsWith(str, c);
+}
+
+definition_t *addDefinition(definitionList_t *list)
+{
+    if (NULL == list)
+    {
+        INTERNAL_ERROR;
+        return NULL;
+    }
+
+    if (NULL == list->first)
+    {
+        list->first = calloc(1, sizeof(definition_t));
+        list->last  = list->first;
+
+        return list->last;
+    }
+
+    if (NULL == list->last)
+    {
+        INTERNAL_ERROR;
+        return NULL;
+    }
+
+    list->last->next = calloc(1, sizeof(definition_t));
+    list->last       = list->last->next;
+
+    return list->last;
+}
+
+definition_t *getDefinition(definitionList_t *list, char *name)
+{
+    if (NULL == list ||
+        NULL == name)
+    {
+        INTERNAL_ERROR;
+        return NULL;
+    }
+
+    for (definition_t *d = list->first; d != NULL; d = d->next)
+    {
+        if (0 == strcmp(d->name, name))
+        {
+            return d;
+        }
+    }
+
+    return NULL;
 }
