@@ -1,0 +1,306 @@
+#include "dcc.h"
+
+static FILE *outputFile = NULL;
+
+static includes_t       *inc = NULL;
+static definitionList_t *def = NULL;
+
+static bool preprocessFile(FILE *inputFile, char *inputFileName);
+
+static bool doInclude(char *buffer, int bufferSize, int *tokenStartIndex, char *fileName, int line)
+{
+    char *token             = NULL;
+    char *newFileName       = NULL;
+    bool  isGlobal          = false;
+    FILE *newInputFile      = NULL;
+    char  cwdRestore[512]   = {0};
+    bool  rc                = false;
+    char *singleIncludeName = NULL;
+
+    if (NULL == buffer ||
+        NULL == tokenStartIndex ||
+        NULL == fileName)
+    {
+        INTERNAL_ERROR;
+        return false;
+    }
+
+    token = getNextTokenFromBuf(buffer, bufferSize, true, tokenStartIndex);
+
+    if (false == stringWrappedWith(token, '"') &&
+        false == (token[0] == '<' &&
+                  stringEndsWith(token, '>')))
+    {
+        ERROR(fileName, line, buffer, "#include expects \"FILENAME\" or <FILENAME>");
+        return false;
+    }
+
+    isGlobal = token[0] == '<';
+
+    // Remove "" or <>
+    newFileName = strncpy(calloc(strlen(token) - 1, sizeof(char)),
+                          &(token[1]),
+                          strlen(token) - 2);
+
+    free(token);
+
+    token = getNextTokenFromBuf(buffer, bufferSize, false, tokenStartIndex);
+
+    if (NULL != token)
+    {
+        ERROR(fileName, line, buffer, "extra tokens at end of #include directive");
+        free(token);
+        free(fileName);
+        return false;
+    }
+
+    if (isGlobal)
+    {
+        // Global include
+        if (cwdRestore != getcwd(cwdRestore, sizeof(cwdRestore)))
+        {
+            INTERNAL_ERROR;
+            return false;
+        }
+
+        if (0 != chdir(STD_INCLUDE_PATH))
+        {
+            printf("Warning: cannot open %s\n", STD_INCLUDE_PATH);
+        }
+        else
+        {
+            newInputFile = fopen(newFileName, "r");
+
+            if (NULL != newInputFile)
+            {
+                goto fileFound;
+            }
+        }
+
+        if (0 != chdir(LIB_INCLUDE_PATH))
+        {
+            printf("Warning: cannot open %s\n", LIB_INCLUDE_PATH);
+        }
+        else
+        {
+            newInputFile = fopen(newFileName, "r");
+
+            if (NULL != newInputFile)
+            {
+                goto fileFound;
+            }
+        }
+
+        chdir(cwdRestore);
+    }
+    else if (NULL != inc)
+    {
+        // Local Include
+        if (inc->singleIncludeCount > 0 &&
+            NULL != inc->singleIncludes)
+        {
+            for (int i = 0; i < inc->singleIncludeCount; i++)
+            {
+                if (false == isolateFileNameWithExtension(inc->singleIncludes[i],
+                                                          &singleIncludeName) ||
+                    NULL  == singleIncludeName)
+                {
+                    INTERNAL_ERROR;
+                    continue;
+                }
+
+                if (0 == strcmp(singleIncludeName, newFileName))
+                {
+                    free(singleIncludeName);
+                    newInputFile = fopen(inc->singleIncludes[i], "r");
+
+                    if (NULL == newInputFile)
+                    {
+                        ERROR_ARGS(fileName, line, buffer,
+                                   "could not open %s", inc->singleIncludes[i]);
+                        free(newFileName);
+                        return false;
+                    }
+
+                    goto fileFound;
+                }
+
+                free(singleIncludeName);
+
+            }
+        }
+
+        if (inc->dirIncludeCount > 0 &&
+            NULL != inc->dirIncludes)
+        {
+            if (cwdRestore != getcwd(cwdRestore, sizeof(cwdRestore)))
+            {
+                INTERNAL_ERROR;
+                free(newFileName);
+                return false;
+            }
+
+            for (int i = 0; i < inc->dirIncludeCount; i++)
+            {
+                if (0 != chdir(inc->dirIncludes[i]))
+                {
+                    printf("Warning: cannot open %s\n", inc->dirIncludes[i]);
+                    chdir(cwdRestore);
+                    continue;
+                }
+
+                newInputFile = fopen(newFileName, "r");
+
+                if (NULL != newInputFile)
+                {
+                    goto fileFound;
+                }
+
+                chdir(cwdRestore);
+            }
+        }
+    }
+
+    ERROR_ARGS(fileName, line, buffer, "could not find %s", newFileName);
+    free(newFileName);
+
+    return false;
+
+    fileFound:
+    rc = preprocessFile(newInputFile, newFileName);
+    if ('\0' != cwdRestore[0])
+    {
+        chdir(cwdRestore);
+    }
+    fclose(newInputFile);
+    free(newFileName);
+    return rc;
+}
+
+/*
+static bool doDefine()
+{
+    return true;
+}*/
+
+static bool preprocessFile(FILE *inputFile, char *inputFileName)
+{
+    char  inputBuffer[2048] = {0};
+    int   lineNumber        = 0;
+    int   tokenStartIndex   = 0;
+    char *token             = NULL;
+    bool  success           = true;
+
+    while(fgets(inputBuffer, sizeof(inputBuffer), inputFile))
+    {
+        lineNumber++;
+
+        tokenStartIndex = 0;
+
+        token = getNextTokenFromBuf(inputBuffer, sizeof(inputBuffer), false, &tokenStartIndex);
+
+        if (NULL == token)
+        {
+            fprintf(outputFile, "\n");
+            continue;
+        }
+
+        if (0 == strcmp(token, PREPRO_DIRECTIVE_PREFIX))
+        {
+            // Preprocessor directive!
+
+            free(token);
+            token = getNextTokenFromBuf(inputBuffer,
+                                        sizeof(inputBuffer),
+                                        false,
+                                        &tokenStartIndex);
+
+            if (0 == strcmp(PREPRO_DIRECTIVE_INCLUDE, token))
+            {
+                free(token);
+                if (false == doInclude(inputBuffer,
+                                       sizeof(inputBuffer),
+                                       &tokenStartIndex,
+                                       inputFileName, lineNumber))
+                {
+                    success = false;
+                    continue;
+                }
+            }
+            else if (0 == strcmp(PREPRO_DIRECTIVE_DEFINE, token))
+            {
+                /*
+                free(token);
+                if (false == doDefine())
+                {
+                    success = false;
+                    continue;
+                }*/
+            }
+            else
+            {
+                ERROR_ARGS(inputFileName,
+                           lineNumber,
+                           inputBuffer,
+                           "unknown preprocessor directive \"%s\"",
+                           token);
+                free(token);
+                success = false;
+                continue;
+            }
+
+            continue;
+        }
+
+        // Just dump everything else
+        fprintf(outputFile, "%s", inputBuffer);
+    }
+
+    return success;
+}
+
+bool preprocessor(char *inName, char *outName, includes_t *includes)
+{
+    definitionList_t definitions = {0};
+    FILE            *inputFile   = NULL;
+    bool             success     = false;
+
+    if (NULL == inName  ||
+        NULL == outName ||
+        NULL == includes)
+    {
+        INTERNAL_ERROR;
+        return false;
+    }
+
+    inc = includes;
+    def = &definitions;
+
+    inputFile = fopen(inName, "r");
+
+    if (NULL == inputFile)
+    {
+        printf("Could not open %s\n", inName);
+        return false;
+    }
+
+    outputFile = fopen(outName, "w");
+
+    if (NULL == outputFile)
+    {
+        fclose(inputFile);
+        return false;
+    }
+
+    success = preprocessFile(inputFile, inName);
+
+    fclose(inputFile);
+    fclose(outputFile);
+
+    if (false == success)
+    {
+        remove(outName);
+    }
+
+    return success;
+}
