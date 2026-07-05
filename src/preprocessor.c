@@ -2,7 +2,7 @@
 
 static FILE *outputFile = NULL;
 
-static includes_t       *inc = NULL;
+static char            **inc = NULL;
 static definitionList_t *def = NULL;
 
 static bool preprocessFile(FILE *inputFile, char *inputFileName);
@@ -93,15 +93,21 @@ static bool doInclude(char *buffer, int bufferSize, int *tokenStartIndex, char *
 
         chdir(cwdRestore);
     }
-    else if (NULL != inc)
+    else
     {
         // Local Include
-        if (inc->singleIncludeCount > 0 &&
-            NULL != inc->singleIncludes)
+        newInputFile = fopen(newFileName, "r");
+
+        if (NULL != newInputFile)
         {
-            for (int i = 0; i < inc->singleIncludeCount; i++)
+            goto fileFound;
+        }
+
+        if (inc != NULL)
+        {
+            for (int i = 0; NULL != inc[i]; i++)
             {
-                if (false == isolateFileNameWithExtension(inc->singleIncludes[i],
+                if (false == isolateFileNameWithExtension(inc[i],
                                                           &singleIncludeName) ||
                     NULL  == singleIncludeName)
                 {
@@ -112,12 +118,12 @@ static bool doInclude(char *buffer, int bufferSize, int *tokenStartIndex, char *
                 if (0 == strcmp(singleIncludeName, newFileName))
                 {
                     free(singleIncludeName);
-                    newInputFile = fopen(inc->singleIncludes[i], "r");
+                    newInputFile = fopen(inc[i], "r");
 
                     if (NULL == newInputFile)
                     {
                         ERROR_ARGS(fileName, line, buffer,
-                                   "could not open %s", inc->singleIncludes[i]);
+                                "could not open %s", inc[i]);
                         free(newFileName);
                         return false;
                     }
@@ -127,36 +133,6 @@ static bool doInclude(char *buffer, int bufferSize, int *tokenStartIndex, char *
 
                 free(singleIncludeName);
 
-            }
-        }
-
-        if (inc->dirIncludeCount > 0 &&
-            NULL != inc->dirIncludes)
-        {
-            if (cwdRestore != getcwd(cwdRestore, sizeof(cwdRestore)))
-            {
-                INTERNAL_ERROR;
-                free(newFileName);
-                return false;
-            }
-
-            for (int i = 0; i < inc->dirIncludeCount; i++)
-            {
-                if (0 != chdir(inc->dirIncludes[i]))
-                {
-                    printf("Warning: cannot open %s\n", inc->dirIncludes[i]);
-                    chdir(cwdRestore);
-                    continue;
-                }
-
-                newInputFile = fopen(newFileName, "r");
-
-                if (NULL != newInputFile)
-                {
-                    goto fileFound;
-                }
-
-                chdir(cwdRestore);
             }
         }
     }
@@ -207,13 +183,12 @@ static bool doDefine(char *buffer, int bufferSize, int *tokenStartIndex, char *f
         return false;
     }
 
-    /*
     if (NULL != getDefinition(def, token))
     {
         ERROR_ARGS(fileName, line, buffer, "\"%s\" redefined", token);
         free(token);
         return false;
-    }*/
+    }
 
     newDef = addDefinition(def);
 
@@ -369,7 +344,7 @@ static bool preprocessFile(FILE *inputFile, char *inputFileName)
     return success;
 }
 
-bool preprocessor(char *inName, char *outName, includes_t *includes)
+bool preprocessor(char *inName, char *outName, char **includes)
 {
     definitionList_t definitions = {0};
     FILE            *inputFile   = NULL;
@@ -399,10 +374,13 @@ bool preprocessor(char *inName, char *outName, includes_t *includes)
     if (NULL == outputFile)
     {
         fclose(inputFile);
+        INTERNAL_ERROR;
         return false;
     }
 
     success = preprocessFile(inputFile, inName);
+
+    freeDefinitionListContents(def);
 
     fclose(inputFile);
     fclose(outputFile);

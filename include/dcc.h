@@ -9,29 +9,23 @@
 #include <sys/types.h>
 #include <dirent.h>
 #include <unistd.h>
+#include <sys/stat.h>
 
 #define INTERNAL_ERROR printf("Internal error: %s:%d\n", __FUNCTION__, __LINE__)
 
-#define ERROR(file, line, buf, msg)           printf("%s:%d: error: " msg "\n  %d | %s\n\n", file, line, line, buf)
-#define ERROR_ARGS(file, line, buf, msg, ...) printf("%s:%d: error: " msg "\n  %d | %s\n\n", file, line, __VA_ARGS__, line, buf)
+// buf is expected to contain a newline
+#define ERROR(file, line, buf, msg)           printf("%s:%d: error: " msg "\n  %d | %s", file, line, line, buf)
+#define ERROR_ARGS(file, line, buf, msg, ...) printf("%s:%d: error: " msg "\n  %d | %s", file, line, __VA_ARGS__, line, buf)
 
 #define TEMP_DIRECTORY "dTemp"
 
-#define PREPRO_FILE_EXTENSION ".di"
+#define PREPRO_FILE_EXTENSION "di"
 #define STD_INCLUDE_PATH "/usr/lib/dcc/include"
 #define LIB_INCLUDE_PATH "/usr/lib/dlib/include"
 
 #define PREPRO_DIRECTIVE_PREFIX  "#"
 #define PREPRO_DIRECTIVE_INCLUDE "include"
 #define PREPRO_DIRECTIVE_DEFINE  "define"
-
-typedef struct
-{
-    char **singleIncludes;
-    int    singleIncludeCount;
-    char **dirIncludes;
-    int    dirIncludeCount;
-} includes_t;
 
 typedef struct definition_t
 {
@@ -46,7 +40,20 @@ typedef struct
     definition_t *last;
 } definitionList_t;
 
-bool preprocessor(char *inName, char *outName, includes_t *includes);
+typedef struct strll_t
+{
+    char           *str;
+    struct strll_t *next;
+} strll_t;
+
+typedef struct
+{
+    strll_t *first;
+    strll_t *last;
+    int      count;
+} stringLinkedList_t;
+
+bool preprocessor(char *inName, char *outName, char **includes);
 
 // Util
 int  findFirstNonWhitespace(char *buf, int length);
@@ -61,5 +68,10 @@ bool stringWrappedWith(char *str, char c);
 
 definition_t *addDefinition(definitionList_t *list);
 definition_t *getDefinition(definitionList_t *list, char *name);
+void freeDefinitionListContents(definitionList_t *list);
+
+strll_t *addStringLinkedList(stringLinkedList_t *list);
+void freeStringLinkedListContents(stringLinkedList_t *list);
+
 
 #endif //__DCC_H__

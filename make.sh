@@ -1,3 +1,3 @@
 #!/usr/bin/bash
 
-gcc src/*.c -Iinclude include/*.h -o dcc -Wall -Werror -g
+gcc -Iinclude include/*.h src/*.c -o dcc -Wall -Werror

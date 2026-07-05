@@ -391,3 +391,81 @@ definition_t *getDefinition(definitionList_t *list, char *name)
 
     return NULL;
 }
+
+void freeDefinitionListContents(definitionList_t *list)
+{
+    definition_t *current = NULL;
+    definition_t *next    = NULL;
+
+    if (NULL == list ||
+        NULL == list->first)
+    {
+        return;
+    }
+
+    while (current != NULL)
+    {
+        free(current->name);
+        free(current->expansion);
+
+        next = current->next;
+        free(current);
+        current = next;
+    }
+
+    list->first = NULL;
+    list->last  = NULL;
+}
+
+strll_t *addStringLinkedList(stringLinkedList_t *list)
+{
+    if (NULL == list)
+    {
+        return NULL;
+    }
+
+    if (NULL == list->first)
+    {
+        list->first = calloc(1, sizeof(strll_t));
+        list->last  = list->first;
+        list->count = 1;
+
+        return list->last;
+    }
+
+    if (NULL == list->last)
+    {
+        return NULL;
+    }
+
+    list->last->next = calloc(1, sizeof(strll_t));
+    list->last       = list->last->next;
+    list->count++;
+
+    return list->last;
+}
+
+void freeStringLinkedListContents(stringLinkedList_t *list)
+{
+    strll_t *current = NULL;
+    strll_t *next    = NULL;
+
+    if (NULL == list ||
+        NULL == list->first)
+    {
+        return;
+    }
+
+    while (current != NULL)
+    {
+        free(current->str);
+
+        next = current->next;
+        free(current);
+        current = next;
+    }
+
+    list->first = NULL;
+    list->last  = NULL;
+    list->count = 0;
+}
