@@ -82,13 +82,6 @@ typedef struct
     codeBlock_t *codeBlock;
 } stackFrame_t;
 
-typedef enum
-{
-    isRawType_e,
-    isStruct_e,
-    isEnum_e
-} typedefType_e;
-
 typedef struct
 {
     type_t *firstStructEntry;
@@ -109,15 +102,22 @@ typedef struct
     enumEntry_t *lastEntry;
 } enum_t;
 
+typedef enum
+{
+    typeExtension_e,
+    typeStructDefinition_e,
+    typeEnumDefinition_e
+} typedefType_e;
+
 typedef struct typedef_t
 {
-    char *identifier;
-    bool  typedefType_e;
+    char         *identifier;
+    typedefType_e typedefType;
     union
     {
-        rawType_e  rawType;
-        struct_t  *structDefinition;
-        enum_t    *enumDefinition;
+        type_t   typeExtension;
+        struct_t *structDefinition;
+        enum_t   *enumDefinition;
     } content;
 
     struct typedef_t *next;

@@ -1,1 +1,4 @@
-#define SUCCESS 0
+
+typedef unsigned char uchar;
+
+typedef uchar uint8_t;

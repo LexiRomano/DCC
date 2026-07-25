@@ -13,7 +13,8 @@ static variableList_t globalVariables = {0};
 char *g_keywords[] =
 {
     "int", "char", "do", "while", "for", "if", "else", "const",
-    "static", "return", "continue", "break",
+    "static", "return", "continue", "break", "typedef", "struct",
+    "void", "NULL",
     NULL
 };
 
@@ -35,6 +36,64 @@ static char *getNextTokenCheckingForLineChange()
     */
 
     return nextToken;
+}
+
+void drainToNextSemicolon()
+{
+    char *token        = NULL;
+    int   bracketDepth = 0;
+    int   braceDepth   = 0;
+    int   parenDepth   = 0;
+
+    while (true)
+    {
+        if (NULL != token)
+        {
+            free(token);
+            token = NULL;
+        }
+
+        token = getNextTokenCheckingForLineChange();
+
+        if (NULL == token)
+        {
+            return;
+        }
+
+        if (0 == bracketDepth &&
+            0 == braceDepth   &&
+            0 == parenDepth   &&
+            0 == strcmp(";", token))
+        {
+            free(token);
+            return;
+        }
+
+        if (0 == strcmp("[", token))
+        {
+            bracketDepth++;
+        }
+        else if (0 == strcmp("]", token))
+        {
+            bracketDepth--;
+        }
+        else if (0 == strcmp("{", token))
+        {
+            braceDepth++;
+        }
+        else if (0 == strcmp("}", token))
+        {
+            braceDepth--;
+        }
+        else if (0 == strcmp("(", token))
+        {
+            parenDepth++;
+        }
+        else if (0 == strcmp(")", token))
+        {
+            parenDepth--;
+        }
+    }
 }
 
 static void printErrorDuplicateKeyword(char *keyword)
@@ -118,6 +177,16 @@ static bool createVariable(type_t *varType,
         //TODO
     }
 
+    printf("New variable \"%s\" is ", identifier);
+    if (varType->isRaw)
+    {
+        printf("raw (%d)\n", varType->type.rawType);
+    }
+    else
+    {
+        printf("a typedef (%s)\n", varType->type.typeDefinition->identifier);
+    }
+
     newVar = calloc(1, sizeof(*newVar));
 
     newVar->identifier = strcpy(calloc(strlen(identifier) + 1, sizeof(char)), identifier);
@@ -189,6 +258,165 @@ static void applyVarDescriptors(bool isShort, bool isUnsigned, type_t *type)
     }
 }
 
+static void doTypedef()
+{
+    char *token       = NULL;
+    char *ident       = NULL;
+    bool  loopStarted = false;
+    bool  isShort     = false;
+    bool  isUnsigned  = false;
+
+    type_t    *tmpType    = NULL;
+    type_t    *foundType  = NULL;
+    typedef_t *newTypedef = NULL;
+
+    token = getNextTokenCheckingForLineChange();
+
+    if (NULL == token)
+    {
+        printError("incomplete typedef");
+        return;
+    }
+
+    if (0 == strcmp("struct", token))
+    {
+        // is a struct
+        printError("structs not implemented");
+        free(token);
+        return;
+    }
+    if (0 == strcmp("enum", token))
+    {
+        // is an enum
+        printError("enums not implemented");
+        free(token);
+        drainToNextSemicolon();
+        return;
+    }
+
+    while (true)
+    {
+        if (loopStarted)
+        {
+            if (NULL != token)
+            {
+                free(token);
+            }
+
+            token = getNextTokenCheckingForLineChange();
+
+            if (NULL == token)
+            {
+                printError("incomplete typedef");
+            }
+        }
+        loopStarted = true;
+
+        if (NULL != ident)
+        {
+            if (0 == strcmp(";", token))
+            {
+                free(token);
+                token = NULL;
+
+                printf("Typedef \"%s\" complete as ", ident);
+                if (foundType->isRaw)
+                {
+                    printf("raw (%d)\n", foundType->type.rawType);
+                }
+                else
+                {
+                    printf("alias of \"%s\"\n", foundType->type.typeDefinition->identifier);
+                }
+
+                newTypedef = calloc(1, sizeof(*newTypedef));
+
+                newTypedef->identifier = ident;
+                newTypedef->typedefType = typeExtension_e;
+                memcpy(&(newTypedef->content.typeExtension), foundType, sizeof(*foundType));
+
+                if (NULL == typedefs.first)
+                {
+                    typedefs.first = newTypedef;
+                    typedefs.last  = newTypedef;
+                    return;
+                }
+
+                typedefs.last->next = newTypedef;
+                typedefs.last       = newTypedef;
+                return;
+            }
+
+            printError("expected \";\"");
+            free(ident);
+            free(token);
+            drainToNextSemicolon();
+            return;
+        }
+
+        if (0 == strcmp("unsigned", token))
+        {
+            if (isUnsigned)
+            {
+                printErrorDuplicateKeyword("unsigned");
+                continue;
+            }
+            isUnsigned = true;
+            continue;
+        }
+        if (0 == strcmp("short", token))
+        {
+            if (isShort)
+            {
+                printErrorDuplicateKeyword("short");
+                continue;
+            }
+            isShort = true;
+            continue;
+        }
+        if (NULL != (tmpType = findType(token)))
+        {
+            // Found the base variable type
+            if (NULL != foundType)
+            {
+                printError("multiple types specified");
+                free(tmpType);
+                drainToNextSemicolon();
+                return;
+            }
+
+            foundType = tmpType;
+            tmpType   = NULL;
+            
+            applyVarDescriptors(isShort, isUnsigned, foundType);
+
+            continue;
+        }
+
+        if (isIdentifier(token))
+        {
+            if (NULL == foundType)
+            {
+                printError("expected type before identifier");
+                drainToNextSemicolon();
+                break;
+            }
+            ident = token;
+            token = NULL;
+            continue;
+        }
+
+        if (isKeyword(token))
+        {
+            printError("unexpected keyword");
+            drainToNextSemicolon();
+            return;
+        }
+
+        printError("idk what you did, but this is wrong");
+    }
+}
+
 static bool intake()
 {
     char *token = NULL;
@@ -256,17 +484,22 @@ static bool intake()
 
                 if (NULL != ident)
                 {
-                    printError("expected = ; or (");
+                    printError("expected \"=\", \";\", or \"(\"");
 
                     break;
                 }
             }
 
+            if (0 == strcmp("typedef", token))
+            {
+                doTypedef();
+                break;
+            }
             if (0 == strcmp("unsigned", token))
             {
                 if (isUnsigned)
                 {
-                    printErrorDuplicateKeyword("short");
+                    printErrorDuplicateKeyword("unsigned");
                     continue;
                 }
                 isUnsigned = true;
@@ -302,6 +535,12 @@ static bool intake()
 
             if (isIdentifier(token))
             {
+                if (NULL == foundType)
+                {
+                    printError("expected type before identifier");
+                    drainToNextSemicolon();
+                    break;
+                }
                 ident = token;
                 token = NULL;
                 continue;
@@ -310,10 +549,12 @@ static bool intake()
             if (isKeyword(token))
             {
                 printError("unexpected keyword");
+                drainToNextSemicolon();
                 continue;
             }
 
             printError("idk what you did, but this is wrong");
+            drainToNextSemicolon();
         }
 
         isUnsigned = false;

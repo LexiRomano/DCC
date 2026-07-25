@@ -1,4 +1,4 @@
 #include "test.h"
 
-unsigned char something;
+uint8_t something;
 unsigned short int myVar;
