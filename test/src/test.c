@@ -1,6 +1,4 @@
 #include "test.h"
 
-int main()
-{
-    return SUCCESS;
-}
+unsigned char something;
+unsigned short int myVar;

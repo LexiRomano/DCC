@@ -232,6 +232,142 @@ char *getNextTokenFromBuf(char *buf, int bufSize, bool tokenizeAngleBrackets, in
     return strncpy(calloc(end - start + 1, sizeof(char)), &buf[start], end - start + 1);
 }
 
+char *getNextTokenFromFile(FILE *file, int *lineNumber)
+{
+    char outputBuffer[1024] = {0};
+    int  readValue          = 0;
+    char currentChar        = '\0';
+    bool foundStart         = false;
+    bool isInDoubleQuote    = false;
+    bool isInSingleQuote    = false;
+    bool isInEscape         = false;
+
+    if (NULL == file ||
+        NULL == lineNumber)
+    {
+        INTERNAL_ERROR;
+        return NULL;
+    }
+
+    for (int i = 0; i < sizeof(outputBuffer);)
+    {
+        readValue = fgetc(file);
+
+        if (EOF == readValue)
+        {
+            break;
+        }
+
+        currentChar = (char)readValue;
+
+        if (false == foundStart)
+        {
+            if ('\n' == currentChar)
+            {
+                (*lineNumber)++;
+                continue;
+            }
+
+            if (isCharWhitespace(currentChar))
+            {
+                continue;
+            }
+
+            foundStart = true;
+        }
+        else if (false == isInDoubleQuote  &&
+                 false == isInSingleQuote  &&
+                 isCharWhitespace(currentChar))
+        {
+            if ('\n' == currentChar)
+            {
+                // Go back one so that the next pass
+                // can catch the line number change
+                fseek(file, -1, SEEK_CUR);
+            }
+            break;
+        }
+
+        if (0 == i)
+        {
+            if ('"' == currentChar)
+            {
+                isInDoubleQuote = true;
+            }
+            else if ('\'' == currentChar)
+            {
+                isInSingleQuote = true;
+            }
+            else if (false == isCharForIdent(currentChar))
+            {
+                outputBuffer[i++] = currentChar;
+                break;
+            }
+
+            outputBuffer[i++] = currentChar;
+            continue;
+        }
+
+        if ((isInDoubleQuote ||
+             isInSingleQuote) &&
+            '\\' == currentChar    &&
+             false == isInEscape)
+        {
+            isInEscape = true;
+            outputBuffer[i++] = currentChar;
+            continue;
+        }
+
+        if (false == isInEscape)
+        {
+            if (isInDoubleQuote)
+            {
+                if ('"' == currentChar)
+                {
+                    outputBuffer[i] = currentChar;
+                    break;
+                }
+            }
+            else if (isInSingleQuote)
+            {
+                if ('\'' == currentChar)
+                {
+                    outputBuffer[i] = currentChar;
+                    break;
+                }
+
+            }
+        }
+
+        isInEscape = false;
+
+        if (isInDoubleQuote ||
+            isInSingleQuote)
+        {
+            outputBuffer[i++] = currentChar;
+            continue;
+        }
+
+        if (i != 0 &&
+            false == isCharForIdent(currentChar))
+        {
+            outputBuffer[i++] = currentChar;
+            fseek(file, -1, SEEK_CUR);
+            break;
+        }
+
+        outputBuffer[i++] = currentChar;
+    }
+
+    if ('\0' == outputBuffer[0])
+    {
+        return NULL;
+    }
+
+    return strcpy(calloc(strlen(outputBuffer) + 1, sizeof(char)),
+                  outputBuffer);
+}
+
 bool isolateFileName(char *in, char **out)
 {
     int  rawNameStart = 0;
@@ -468,4 +604,75 @@ void freeStringLinkedListContents(stringLinkedList_t *list)
     list->first = NULL;
     list->last  = NULL;
     list->count = 0;
+}
+
+char *getCurrentLine(FILE *file)
+{
+    int  restore      = 0;
+    char tmpChar      = 0;
+    char buffer[1024] = {0};
+
+    if (NULL == file)
+    {
+        return NULL;
+    }
+
+    restore = ftell(file);
+
+    while (0 != ftell(file))
+    {
+        fseek(file, -1, SEEK_CUR);
+
+        tmpChar = fgetc(file);
+
+        if ('\n' == tmpChar)
+        {
+            break;
+        }
+
+        fseek(file, -1, SEEK_CUR);
+    }
+
+    fgets(buffer, sizeof(buffer), file);
+
+    fseek(file, restore, SEEK_SET);
+
+    return strcpy(calloc(strlen(buffer) + 1, sizeof(char)), buffer);
+}
+
+bool isKeyword(char *str)
+{
+    for (char **k = g_keywords; NULL != *k; k++)
+    {
+        if (0 == strcmp(str, *k))
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool isIdentifier(char *str)
+{
+    if (NULL == str ||
+        0    == strlen(str))
+    {
+        return false;
+    }
+
+    if (false == isCharForIdentNoNum(str[0]))
+    {
+        return false;
+    }
+
+    for (char *p = str + 1; '\0' != *p; p++)
+    {
+        if (false == isCharForIdent(*p))
+        {
+            return false;
+        }
+    }
+
+    return !isKeyword(str);
 }
