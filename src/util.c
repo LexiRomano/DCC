@@ -676,3 +676,46 @@ bool isIdentifier(char *str)
 
     return !isKeyword(str);
 }
+
+void freeFunctionContents(function_t *func)
+{
+    if (NULL == func)
+    {
+        return;
+    }
+
+    if (NULL != func->identifier)
+    {
+        free(func->identifier);
+        func->identifier = NULL;
+    }
+
+    if (NULL != func->parameterTypes.first)
+    {
+        type_t *cur = func->parameterTypes.first;
+        type_t *nxt = NULL;
+
+        while (cur != NULL)
+        {
+            nxt = cur->next;
+            free(cur);
+            cur = nxt;
+        }
+
+        func->parameterTypes.first = NULL;
+        func->parameterTypes.last  = NULL;
+    }
+
+    if (NULL != func->parameterNames.first)
+    {
+        freeStringLinkedListContents(&(func->parameterNames));
+    }
+
+    /*
+    // TODO
+    if (NULL != func->definition.codeBlock.firstItem)
+    {
+        freeVoidListContents(&(func->definition.codeBlock));
+    }
+    */
+}

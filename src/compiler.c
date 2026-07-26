@@ -4,10 +4,14 @@ static FILE *inputFile  = NULL;
 static int   lineNumber = 1;
 static char *fileName   = NULL;
 
+static int lineRewind = 1;
+static int offsetRewind = 0;
+
 static bool  error      = false;
 
 static typedefs_t     typedefs        = {0};
 static variableList_t globalVariables = {0};
+//static functionList_t functions       = {0};
 
 
 char *g_keywords[] =
@@ -18,6 +22,25 @@ char *g_keywords[] =
     NULL
 };
 
+// DEBUG
+static void DEBUG_printType(type_t *t)
+{
+    if (NULL == t)
+    {
+        INTERNAL_ERROR;
+        return;
+    }
+
+    if (t->isRaw)
+    {
+        printf("TYPE: raw (%d)\n", t->type.rawType);
+    }
+    else
+    {
+        printf("TYPE: typedef (%s)\n", t->type.typeDefinition->identifier);
+    }
+}
+// DEBUG
 
 static char *getNextTokenCheckingForLineChange()
 {
@@ -36,6 +59,18 @@ static char *getNextTokenCheckingForLineChange()
     */
 
     return nextToken;
+}
+
+static void saveForRewindTokenParse()
+{
+    lineRewind   = lineNumber;
+    offsetRewind = ftell(inputFile);
+}
+
+static void rewindTokenParse()
+{
+    lineNumber = lineRewind;
+    fseek(inputFile, offsetRewind, SEEK_SET);
 }
 
 void drainToNextSemicolon()
@@ -96,6 +131,41 @@ void drainToNextSemicolon()
     }
 }
 
+void drainToEndOfBlock()
+{
+    char *token      = NULL;
+    int   braceDepth = 0;
+
+    while (true)
+    {
+        if (NULL != token)
+        {
+            free(token);
+            token = NULL;
+        }
+
+        token = getNextTokenCheckingForLineChange();
+
+        if (NULL == token)
+        {
+            return;
+        }
+
+        if (0 == strcmp("{", token))
+        {
+            braceDepth++;
+        }
+        else if (0 == strcmp("}", token))
+        {
+            braceDepth--;
+            if (0 == braceDepth)
+            {
+                return;
+            }
+        }
+    }
+}
+
 static void printErrorDuplicateKeyword(char *keyword)
 {
     char *line = getCurrentLine(inputFile);
@@ -143,6 +213,15 @@ static type_t *findType(char *str)
         return out;
     }
 
+    if (0 == strcmp(str, "void"))
+    {
+        out = calloc(1, sizeof(*out));
+
+        out->isVoid = true;
+        
+        return out;
+    }
+
     for (typedef_t *t = typedefs.first; NULL != t; t = t->next)
     {
         if (0 == strcmp(str, t->identifier))
@@ -177,15 +256,10 @@ static bool createVariable(type_t *varType,
         //TODO
     }
 
+    // DEBUG
     printf("New variable \"%s\" is ", identifier);
-    if (varType->isRaw)
-    {
-        printf("raw (%d)\n", varType->type.rawType);
-    }
-    else
-    {
-        printf("a typedef (%s)\n", varType->type.typeDefinition->identifier);
-    }
+    DEBUG_printType(varType);
+    // DEBUG
 
     newVar = calloc(1, sizeof(*newVar));
 
@@ -258,6 +332,101 @@ static void applyVarDescriptors(bool isShort, bool isUnsigned, type_t *type)
     }
 }
 
+static bool getTypeAndIdent(type_t **typeOut,
+                            char   **identOut)
+{
+    char *token = NULL;
+
+    bool isUnsigned = false;
+    bool isShort    = false;
+
+    type_t *tmpType   = NULL;
+    type_t *foundType = NULL;
+
+    if (NULL ==  typeOut  ||
+        NULL != *typeOut  ||
+        NULL ==  identOut ||
+        NULL != *identOut)
+    {
+        INTERNAL_ERROR;
+    }
+
+    while (true)
+    {
+        if (NULL != token)
+        {
+            free(token);
+        }
+
+        token = getNextTokenCheckingForLineChange();
+
+        if (NULL == token)
+        {
+            printError("incomplete statement");
+            return false;
+        }
+
+        if (0 == strcmp("unsigned", token))
+        {
+            if (isUnsigned)
+            {
+                printErrorDuplicateKeyword("unsigned");
+                continue;
+            }
+            isUnsigned = true;
+            continue;
+        }
+        if (0 == strcmp("short", token))
+        {
+            if (isShort)
+            {
+                printErrorDuplicateKeyword("short");
+                continue;
+            }
+            isShort = true;
+            continue;
+        }
+        if (NULL != (tmpType = findType(token)))
+        {
+            // Found the base variable type
+            if (NULL != foundType)
+            {
+                printError("multiple types specified");
+                free(tmpType);
+                return false;
+            }
+
+            foundType = tmpType;
+            tmpType   = NULL;
+            
+            applyVarDescriptors(isShort, isUnsigned, foundType);
+
+            continue;
+        }
+
+        if (isIdentifier(token))
+        {
+            if (NULL == foundType)
+            {
+                printError("expected type before identifier");
+                return false;
+            }
+            *identOut = token;
+            *typeOut  = foundType;
+            return true;
+        }
+
+        if (isKeyword(token))
+        {
+            printError("unexpected keyword");
+            drainToNextSemicolon();
+            return false;
+        }
+
+        printError("idk what you did, but this is wrong");
+    }
+}
+
 static void doTypedef()
 {
     char *token       = NULL;
@@ -319,6 +488,7 @@ static void doTypedef()
                 free(token);
                 token = NULL;
 
+                // DEBUG
                 printf("Typedef \"%s\" complete as ", ident);
                 if (foundType->isRaw)
                 {
@@ -328,6 +498,7 @@ static void doTypedef()
                 {
                     printf("alias of \"%s\"\n", foundType->type.typeDefinition->identifier);
                 }
+                // DEBUG
 
                 newTypedef = calloc(1, sizeof(*newTypedef));
 
@@ -417,6 +588,148 @@ static void doTypedef()
     }
 }
 
+// The opening "(" has already been parsed
+static void processFunction(type_t *returnType,
+                            char   *identifier)
+{
+    function_t newFunction   = {0};
+    char      *token         = NULL;
+    bool       findArguments = false;
+    type_t    *foundType     = NULL;
+    char      *foundIdent    = NULL;
+    strll_t   *tmpStrll      = NULL;
+
+    if (NULL == returnType ||
+        NULL == identifier)
+    {
+        INTERNAL_ERROR;
+        return;
+    }
+
+    // DEBUG
+    printf("Processing function \"%s\"\n", identifier);
+    // DEBUG
+
+    saveForRewindTokenParse();
+
+    token = getNextTokenCheckingForLineChange();
+
+    if (NULL == token)
+    {
+        printError("incomplete function declaration");
+        return;
+    }
+
+    findArguments = true;
+    if (0 == strcmp(")", token))
+    {
+        findArguments = false;
+    }
+    else if (0 == strcmp(",", token))
+    {
+        printError("expected a type specifier");
+        return;
+    }
+    else
+    {
+        rewindTokenParse();
+    }
+
+    // Getting the arguments
+    while (findArguments)
+    {
+        if (NULL != token)
+        {
+            free(token);
+            token = NULL;
+        }
+
+        if (false == getTypeAndIdent(&foundType, &foundIdent))
+        {
+            freeFunctionContents(&newFunction);
+            return;
+        }
+
+        // DEBUG
+        printf("  New parameter: \"%s\" of ", foundIdent);
+        DEBUG_printType(foundType);
+        // DEBUG
+
+        tmpStrll = addStringLinkedList(&(newFunction.parameterNames));
+
+        if (NULL == tmpStrll)
+        {
+            INTERNAL_ERROR;
+            freeFunctionContents(&newFunction);
+            return;
+        }
+
+        tmpStrll->str = foundIdent;
+        foundIdent    = NULL;
+
+        if (NULL == newFunction.parameterTypes.first)
+        {
+            newFunction.parameterTypes.first = foundType;
+            newFunction.parameterTypes.last  = foundType;
+        }
+        else
+        {
+            newFunction.parameterTypes.last->next = foundType;
+            newFunction.parameterTypes.last       = foundType;
+        }
+
+        foundType = NULL;
+        
+
+        token = getNextTokenCheckingForLineChange();
+
+        if (NULL == token)
+        {
+            printError("incomplete function declaration");
+            freeFunctionContents(&newFunction);
+            return;
+        }
+
+        if (0 == strcmp(")", token))
+        {
+            break;
+        }
+        if (0 == strcmp(",", token))
+        {
+            continue;
+        }
+
+        printError("expected \",\" or \")\"");
+        freeFunctionContents(&newFunction);
+        return;
+    }
+
+    if (NULL != token)
+    {
+        free(token);
+    }
+
+    saveForRewindTokenParse();
+
+    token = getNextTokenCheckingForLineChange();
+
+    if (NULL == token ||
+        (0 != strcmp(";", token) &&
+         0 != strcmp("{", token)))
+    {
+        printError("expected \";\" or \"{\"");
+        return;
+    }
+
+    free(token);
+
+    rewindTokenParse();
+
+    drainToEndOfBlock();
+
+    //TODO
+}
+
 static bool intake()
 {
     char *token = NULL;
@@ -451,21 +764,11 @@ static bool intake()
                 if (0 == strcmp("=", token))
                 {
                     // variable declaration + assignment
-                    if (NULL == ident)
-                    {
-                        printError("expected identifier");
-                        break;
-                    }
                     break;
                 }
                 if (0 == strcmp(";", token))
                 {
                     // variable declaration
-                    if (NULL == ident)
-                    {
-                        printError("expected identifier");
-                        break;
-                    }
 
                     createVariable(foundType, ident, &globalVariables, false);
 
@@ -474,20 +777,14 @@ static bool intake()
                 if (0 == strcmp("(", token))
                 {
                     // function declaration/definition
-                    if (NULL == ident)
-                    {
-                        printError("expected identifier");
-                        break;
-                    }
+                    processFunction(foundType, ident);
                     break;
                 }
 
-                if (NULL != ident)
-                {
-                    printError("expected \"=\", \";\", or \"(\"");
+                printError("expected \"=\", \";\", or \"(\"");
+                drainToNextSemicolon();
 
-                    break;
-                }
+                break;
             }
 
             if (0 == strcmp("typedef", token))

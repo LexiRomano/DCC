@@ -1,7 +1,33 @@
 #ifndef __PARSED_STRUCTS_H__
 #define __PARSED_STRUCTS_H__
 
-#include "dcc.h"
+#include <stdbool.h>
+
+typedef struct definition_t
+{
+    char                *name;
+    char                *expansion;
+    struct definition_t *next;
+} definition_t;
+
+typedef struct
+{
+    definition_t *first;
+    definition_t *last;
+} definitionList_t;
+
+typedef struct strll_t
+{
+    char           *str;
+    struct strll_t *next;
+} strll_t;
+
+typedef struct
+{
+    strll_t *first;
+    strll_t *last;
+    int      count;
+} stringLinkedList_t;
 
 typedef enum
 {
@@ -10,7 +36,8 @@ typedef enum
     stackFrame_e,
     expression_e,
     variable_e,
-    typedef_e
+    typedef_e,
+    type_e
 } ident_e;
 
 typedef enum
@@ -24,8 +51,9 @@ typedef enum
 } rawType_e;
 
 struct typedef_t; // forawrd declaration
-typedef struct
+typedef struct type_t
 {
+    bool isVoid;
     bool isRaw;
     union
     {
@@ -33,7 +61,14 @@ typedef struct
         struct typedef_t *typeDefinition;
     } type;
     unsigned char pointerDepth;
+    struct type_t *next;
 } type_t;
+
+typedef struct
+{
+    type_t *first;
+    type_t *last;
+} typeList_t;
 
 typedef struct voidContainer_t
 {
@@ -72,15 +107,27 @@ typedef voidList_t codeBlock_t;
 
 typedef struct
 {
-    char  *identifier;
-    type_t returnType;
+    codeBlock_t codeBlock;
+} stackFrame_t;
 
+typedef struct function_t
+{
+    char              *identifier;
+    type_t             returnType;
+    typeList_t         parameterTypes;
+    stringLinkedList_t parameterNames;
+    
+    bool         isDefined;
+    stackFrame_t definition;
+
+    struct function_t *next;
 } function_t;
 
 typedef struct
 {
-    codeBlock_t *codeBlock;
-} stackFrame_t;
+    function_t *first;
+    function_t *last;
+} functionList_t;
 
 typedef struct
 {

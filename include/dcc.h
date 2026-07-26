@@ -5,7 +5,6 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <string.h>
-#include <stdbool.h>
 #include <sys/types.h>
 #include <dirent.h>
 #include <unistd.h>
@@ -29,32 +28,6 @@
 #define PREPRO_DIRECTIVE_PREFIX  "#"
 #define PREPRO_DIRECTIVE_INCLUDE "include"
 #define PREPRO_DIRECTIVE_DEFINE  "define"
-
-typedef struct definition_t
-{
-    char                *name;
-    char                *expansion;
-    struct definition_t *next;
-} definition_t;
-
-typedef struct
-{
-    definition_t *first;
-    definition_t *last;
-} definitionList_t;
-
-typedef struct strll_t
-{
-    char           *str;
-    struct strll_t *next;
-} strll_t;
-
-typedef struct
-{
-    strll_t *first;
-    strll_t *last;
-    int      count;
-} stringLinkedList_t;
 
 bool preprocessor(char *inName, char *outName, char **includes);
 bool compile(char *inputFileName, char *outputFilenNme);
@@ -83,5 +56,6 @@ void freeDefinitionListContents(definitionList_t *list);
 strll_t *addStringLinkedList(stringLinkedList_t *list);
 void freeStringLinkedListContents(stringLinkedList_t *list);
 
+void freeFunctionContents(function_t *func);
 
 #endif //__DCC_H__
