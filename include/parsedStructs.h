@@ -105,9 +105,11 @@ typedef struct expression_t
 
 typedef voidList_t codeBlock_t;
 
-typedef struct
+typedef struct stackFrame_t
 {
-    codeBlock_t codeBlock;
+    struct stackFrame_t *prevAccessableStackFrame;
+    codeBlock_t          codeBlock;
+    variableList_t       variables;
 } stackFrame_t;
 
 typedef struct function_t

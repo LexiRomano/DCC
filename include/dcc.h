@@ -58,4 +58,9 @@ void freeStringLinkedListContents(stringLinkedList_t *list);
 
 void freeFunctionContents(function_t *func);
 
+variable_t *findVariable(variableList_t *varList, char *ident);
+void freeVariableList(variableList_t *varList);
+
+void freeVoidListContents(voidList_t *vl);
+
 #endif //__DCC_H__

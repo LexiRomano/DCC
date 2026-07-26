@@ -131,10 +131,15 @@ void drainToNextSemicolon()
     }
 }
 
-void drainToEndOfBlock()
+void drainToEndOfBlock(bool alreadyInBlock)
 {
     char *token      = NULL;
     int   braceDepth = 0;
+
+    if (alreadyInBlock)
+    {
+        braceDepth++;
+    }
 
     while (true)
     {
@@ -506,6 +511,7 @@ static void doTypedef()
         return;
     }
 
+    // DEBUG
     printf("Typedef \"%s\" complete as ", foundIdent);
     if (foundType->isRaw)
     {
@@ -532,6 +538,186 @@ static void doTypedef()
 
     typedefs.last->next = newTypedef;
     typedefs.last       = newTypedef;
+}
+
+// The opening "{" has already been parsed
+static void processStackFrame(stackFrame_t *stackFrame)
+{
+    char *token = NULL;
+    bool  rc    = true;
+
+    stackFrame_t *tmpStackFrame = NULL;
+    variable_t   *tmpVar        = NULL;
+    type_t       *tmpType       = NULL;
+
+    if (NULL == stackFrame)
+    {
+        INTERNAL_ERROR;
+        return;
+    }
+
+    while (true)
+    {
+        saveForRewindTokenParse();
+
+        if (NULL != token)
+        {
+            free(token);
+        }
+
+        token = getNextTokenCheckingForLineChange();
+
+        if (NULL == token)
+        {
+            printError("Expected \"}\"");
+        }
+
+        if (0 == strcmp("}", token))
+        {
+            free(token);
+            token = NULL;
+
+            if (rc)
+            {
+                return;
+            }
+            break;
+        }
+
+        if (0 == strcmp("if", token))
+        {
+            //TODO
+            printError("if statements not implemented");
+            break;
+        }
+        if (0 == strcmp("else", token))
+        {
+            //TODO
+            printError("else statements not implemented");
+            break;
+        }
+        if (0 == strcmp("for", token))
+        {
+            //TODO
+            printError("for statements not implemented");
+            break;
+        }
+        if (0 == strcmp("do", token))
+        {
+            //TODO
+            printError("do statements not implemented");
+            break;
+        }
+        if (0 == strcmp("while", token))
+        {
+            //TODO
+            printError("while statements not implemented");
+            break;
+        }
+
+        if (0 == strcmp("{", token))
+        {
+            free(token);
+            tmpStackFrame = calloc(1, sizeof(*stackFrame));
+            tmpStackFrame->prevAccessableStackFrame = stackFrame;
+            processStackFrame(tmpStackFrame);
+            continue;
+        }
+
+        if (0 == strcmp("unsigned", token) ||
+            0 == strcmp("short",    token) ||
+            NULL != (tmpType = findType(token)))
+        {
+            // Declaring/defining a variable
+            free(token);
+            token = NULL;
+
+
+            rewindTokenParse();
+            if (NULL != tmpType)
+            {
+                free(tmpType);
+                tmpType = NULL;
+            }
+
+            if (false == getTypeAndIdent(&tmpType, &token))
+            {
+                drainToNextSemicolon();
+                continue;
+            }
+
+            if (NULL != (tmpVar = findVariable(&(stackFrame->variables), token)))
+            {
+                tmpVar = NULL;
+                printError("Redefinition of variable");
+                free(tmpType);
+                tmpType = NULL;
+                drainToNextSemicolon();
+                continue;
+            }
+
+            tmpVar = calloc(1, sizeof(*tmpVar));
+
+            tmpVar->identifier = token;
+            token              = NULL;
+
+            memcpy(&(tmpVar->type), tmpType, sizeof(*tmpType));
+            free(tmpType);
+            tmpType = NULL;
+
+            if (NULL == stackFrame->variables.first)
+            {
+                stackFrame->variables.first = tmpVar;
+                stackFrame->variables.last  = tmpVar;
+            }
+            else
+            {
+                stackFrame->variables.last->next = tmpVar;
+                stackFrame->variables.last       = tmpVar;
+            }
+
+            token = getNextTokenCheckingForLineChange();
+
+            if (NULL == token)
+            {
+                printError("expected \";\" or \"=\"");
+                drainToNextSemicolon();
+                rc = false;
+                continue;
+            }
+
+            if (0 == strcmp(";", token))
+            {
+                // DEBUG
+                printf("New variable defined as \"%s\" with ", tmpVar->identifier);
+                DEBUG_printType(&(tmpVar->type));
+                // DEBUG
+                tmpVar = NULL;
+                continue;
+            }
+
+            if (0 != strcmp("=", token))
+            {
+                printError("expected \";\" or \"=\"");
+                drainToNextSemicolon();
+                rc = false;
+                continue;
+            }
+
+            printError("simultaneous declaration and assignment not supported");
+            drainToNextSemicolon();
+            rc = false;
+            continue;
+        }
+
+        printError("No clue what you're doing, but I haven't implemented it yet");
+        drainToNextSemicolon();
+    }
+
+    // Error path
+    drainToEndOfBlock(true);
+    freeVoidListContents(&(stackFrame->codeBlock));
+    freeVariableList(&(stackFrame->variables));
 }
 
 // The opening "(" has already been parsed
@@ -647,15 +833,35 @@ static void processFunction(type_t *returnType,
 
         printError("expected \",\" or \")\"");
         freeFunctionContents(&newFunction);
-        return;
+        while (true)
+        {
+            if (NULL != token)
+            {
+                free(token);
+            }
+            token = getNextTokenCheckingForLineChange();
+            if (NULL == token)
+            {
+                return;
+            }
+            if (0 == strcmp(";", token))
+            {
+                free(token);
+                return;
+            }
+            if (0 == strcmp("{", token))
+            {
+                free(token);
+                drainToEndOfBlock(true);
+                return;
+            }
+        }
     }
 
     if (NULL != token)
     {
         free(token);
     }
-
-    saveForRewindTokenParse();
 
     token = getNextTokenCheckingForLineChange();
 
@@ -669,11 +875,7 @@ static void processFunction(type_t *returnType,
 
     free(token);
 
-    rewindTokenParse();
-
-    drainToEndOfBlock();
-
-    //TODO
+    processStackFrame(&(newFunction.definition));
 }
 
 static bool intake()

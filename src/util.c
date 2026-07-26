@@ -719,3 +719,118 @@ void freeFunctionContents(function_t *func)
     }
     */
 }
+
+variable_t *findVariable(variableList_t *varList, char *ident)
+{
+    if (NULL == varList ||
+        NULL == ident)
+    {
+        INTERNAL_ERROR;
+        return NULL;
+    }
+
+    for (variable_t *v = varList->first; NULL != v; v = v->next)
+    {
+        if (0 == strcmp(v->identifier, ident))
+        {
+            return v;
+        }
+    }
+
+    return NULL;
+}
+
+void freeVariableList(variableList_t *varList)
+{
+    variable_t *cur = NULL;
+    variable_t *nxt = NULL;
+
+    if (NULL == varList)
+    {
+        return;
+    }
+
+    cur = varList->first;
+
+    while (cur != NULL)
+    {
+        nxt = cur->next;
+
+        free(cur->identifier);
+        free(cur);
+        cur = nxt;
+    }
+}
+
+void freeVoidListContents(voidList_t *vl)
+{
+    voidContainer_t *cur = NULL;
+    voidContainer_t *nxt = NULL;
+
+    if (NULL == vl)
+    {
+        return;
+    }
+
+    cur = vl->firstItem;
+
+    while (cur != NULL)
+    {
+        nxt = cur->nextVoidContainer;
+
+        if (NULL != cur->data)
+        {
+            switch (cur->type)
+            {
+                case codeBlock_e:
+                {
+                    INTERNAL_ERROR;
+                    break;
+                }
+                case function_e:
+                {
+                    freeFunctionContents((function_t*) cur->data);
+                    break;
+                }
+                case stackFrame_e:
+                {
+                    INTERNAL_ERROR;
+                    break;
+                }
+                case expression_e:
+                {
+                    INTERNAL_ERROR;
+                    break;
+                }
+                case variable_e:
+                {
+                    INTERNAL_ERROR;
+                    break;
+                }
+                case typedef_e:
+                {
+                    INTERNAL_ERROR;
+                    break;
+                }
+                case type_e:
+                {
+                    // Nothing to free
+                    break;
+                }
+                default:
+                {
+                    INTERNAL_ERROR;
+                    break;
+                }
+            }
+
+            free(cur->data);
+        }
+
+        free(cur);
+        cur = nxt;
+    }
+
+    vl->firstItem = NULL;
+    vl->lastItem  = NULL;
+}
