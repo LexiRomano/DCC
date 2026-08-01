@@ -11,7 +11,7 @@ static bool  error      = false;
 
 static typedefs_t     typedefs        = {0};
 static variableList_t globalVariables = {0};
-//static functionList_t functions       = {0};
+static functionList_t functions       = {0};
 
 
 char *g_keywords[] =
@@ -21,26 +21,6 @@ char *g_keywords[] =
     "void", "NULL", "unsigned",
     NULL
 };
-
-// DEBUG
-static void DEBUG_printType(type_t *t)
-{
-    if (NULL == t)
-    {
-        INTERNAL_ERROR;
-        return;
-    }
-
-    if (t->isRaw)
-    {
-        printf("TYPE: raw (%d)\n", t->type.rawType);
-    }
-    else
-    {
-        printf("TYPE: typedef (%s)\n", t->type.typeDefinition->identifier);
-    }
-}
-// DEBUG
 
 static char *getNextTokenCheckingForLineChange()
 {
@@ -260,11 +240,6 @@ static bool createVariable(type_t *varType,
     {
         //TODO
     }
-
-    // DEBUG
-    printf("New variable \"%s\" is ", identifier);
-    DEBUG_printType(varType);
-    // DEBUG
 
     newVar = calloc(1, sizeof(*newVar));
 
@@ -511,18 +486,6 @@ static void doTypedef()
         return;
     }
 
-    // DEBUG
-    printf("Typedef \"%s\" complete as ", foundIdent);
-    if (foundType->isRaw)
-    {
-        printf("raw (%d)\n", foundType->type.rawType);
-    }
-    else
-    {
-        printf("alias of \"%s\"\n", foundType->type.typeDefinition->identifier);
-    }
-    // DEBUG
-
     newTypedef = calloc(1, sizeof(*newTypedef));
 
     newTypedef->identifier = foundIdent;
@@ -570,6 +533,7 @@ static void processStackFrame(stackFrame_t *stackFrame)
         if (NULL == token)
         {
             printError("Expected \"}\"");
+            return;
         }
 
         if (0 == strcmp("}", token))
@@ -688,10 +652,6 @@ static void processStackFrame(stackFrame_t *stackFrame)
 
             if (0 == strcmp(";", token))
             {
-                // DEBUG
-                printf("New variable defined as \"%s\" with ", tmpVar->identifier);
-                DEBUG_printType(&(tmpVar->type));
-                // DEBUG
                 tmpVar = NULL;
                 continue;
             }
@@ -738,10 +698,6 @@ static void processFunction(type_t *returnType,
         return;
     }
 
-    // DEBUG
-    printf("Processing function \"%s\"\n", identifier);
-    // DEBUG
-
     saveForRewindTokenParse();
 
     token = getNextTokenCheckingForLineChange();
@@ -781,11 +737,6 @@ static void processFunction(type_t *returnType,
             freeFunctionContents(&newFunction);
             return;
         }
-
-        // DEBUG
-        printf("  New parameter: \"%s\" of ", foundIdent);
-        DEBUG_printType(foundType);
-        // DEBUG
 
         tmpStrll = addStringLinkedList(&(newFunction.parameterNames));
 
@@ -873,9 +824,28 @@ static void processFunction(type_t *returnType,
         return;
     }
 
+    if (0 == strcmp("{", token))
+    {
+        processStackFrame(&(newFunction.definition));
+        newFunction.isDefined = true;
+    }
+
     free(token);
 
-    processStackFrame(&(newFunction.definition));
+
+    memcpy(&newFunction.returnType, returnType, sizeof(*returnType));
+    newFunction.identifier = strcpy(calloc(strlen(identifier) + 1, sizeof(char)), identifier);
+
+    if (NULL == functions.first)
+    {
+        functions.first = memcpy(calloc(1, sizeof(newFunction)), &newFunction, sizeof(newFunction));
+        functions.last  = functions.first;
+    }
+    else
+    {
+        functions.last->next = memcpy(calloc(1, sizeof(newFunction)), &newFunction, sizeof(newFunction));
+        functions.last       = functions.last->next;
+    }
 }
 
 static bool intake()
@@ -1030,8 +1000,236 @@ static bool intake()
         }
     }
 
-    return error;
+    return !error;
 }
+
+// DEBUG
+
+#define PRINT_DEBUG_BANNER printf("\n========================================"\
+                                    "========================================\n\n")
+
+static void DEBUG_printType(type_t *t)
+{
+    if (NULL == t)
+    {
+        INTERNAL_ERROR;
+        return;
+    }
+
+    if (t->isVoid)
+    {
+        printf("void");
+    }
+    else if (t->isRaw)
+    {
+        switch (t->type.rawType)
+        {
+            case int_e:
+            {
+                printf("int");
+                break;
+            }
+            case uint_e:
+            {
+                printf("uint");
+                break;
+            }
+            case hint_e:
+            {
+                printf("hint");
+                break;
+            }
+            case huint_e:
+            {
+                printf("huint");
+                break;
+            }
+            case char_e:
+            {
+                printf("char");
+                break;
+            }
+            case uchar_e:
+            {
+                printf("uchar");
+                break;
+            }
+            default:
+            {
+                INTERNAL_ERROR;
+                break;
+            }
+        }
+    }
+    else if (NULL != t->type.typeDefinition)
+    {
+        printf("%s", t->type.typeDefinition->identifier);
+    }
+    else
+    {
+        INTERNAL_ERROR;
+        return;
+    }
+
+    for (int i = 0; i < t->pointerDepth; i++)
+    {
+        printf("*");
+    }
+}
+
+static void DEBUG_printPadding(int padding)
+{
+    for (int i = 0; i < padding; i++)
+    {
+        printf(" ");
+    }
+}
+
+static void DEBUG_printStackFrame(int padding, stackFrame_t *sf)
+{
+    if (padding < 0 ||
+        NULL == sf)
+    {
+        INTERNAL_ERROR;
+        return;
+    }
+
+    DEBUG_printPadding(padding);
+    printf("variables:\n");
+    if (NULL == sf->variables.first)
+    {
+        DEBUG_printPadding(padding + 2);
+        printf("NONE\n");
+    }
+    else
+    {
+        for (variable_t *v = sf->variables.first; NULL != v; v = v->next)
+        {
+            DEBUG_printPadding(padding + 2);
+            printf ("%s is of type ", v->identifier);
+            DEBUG_printType(&v->type);
+            printf("\n");
+        }
+    }
+}
+
+static void printDebug()
+{
+    PRINT_DEBUG_BANNER;
+    printf("Typedefs:\n");
+    if (NULL == typedefs.first)
+    {
+        printf("  NONE\n");
+    }
+    else
+    {
+        for (typedef_t *t = typedefs.first; NULL != t; t = t->next)
+        {
+            printf("  %s is ", t->identifier);
+            switch (t->typedefType)
+            {
+                case typeExtension_e:
+                {
+                    printf("of type ");
+                    DEBUG_printType(&t->content.typeExtension);
+                    printf("\n");
+                    break;
+                }
+                case typeStructDefinition_e:
+                {
+                    printf("a structure <not yet represented>\n");
+                    break;
+                }
+                case typeEnumDefinition_e:
+                {
+                    printf("an enum <not yet represented>\n");
+                    break;
+                }
+                default:
+                {
+                    printf("broken\n");
+                    break;
+                }
+            }
+        }
+    }
+
+    PRINT_DEBUG_BANNER;
+
+    printf("Global variables:\n");
+    if (NULL == globalVariables.first)
+    {
+        printf("  NONE\n");
+    }
+    else
+    {
+        for (variable_t *v = globalVariables.first; NULL != v; v = v->next)
+        {
+            printf ("  %s is of type ", v->identifier);
+            DEBUG_printType(&v->type);
+            printf("\n");
+        }
+    }
+
+    PRINT_DEBUG_BANNER;
+
+    printf("Functions:\n");
+    if (NULL == functions.first)
+    {
+        printf(" NONE\n");
+    }
+    else
+    {
+        for (function_t *f = functions.first; NULL != f; f = f->next)
+        {
+            printf("  %s:\n", f->identifier);
+
+            printf("    returns ");
+            DEBUG_printType(&f->returnType);
+            printf("\n");
+
+            printf("    parameters:\n");
+            if (NULL == f->parameterNames.first ||
+                NULL == f->parameterTypes.first)
+            {
+                printf("      NONE\n");
+            }
+            else
+            {
+                strll_t *i = f->parameterNames.first;
+                type_t  *t = f->parameterTypes.first;
+                
+                while (i != NULL && t != NULL)
+                {
+                    printf("      ");
+                    DEBUG_printType(t);
+                    printf(" (called %s)\n", i->str);
+
+                    i = i->next;
+                    t = t->next;
+                }
+            }
+
+            printf("    definition:\n");
+            if (false == f->isDefined)
+            {
+                printf("      NONE\n");
+            }
+            else
+            {
+                DEBUG_printStackFrame(6, &f->definition);
+            }
+
+            if (NULL != f->next)
+            {
+                printf("\n");
+            }
+        }
+    }
+
+    PRINT_DEBUG_BANNER;
+}
+// DEBUG
 
 bool compile(char *inputFileName, char *outputFileName)
 {
@@ -1062,6 +1260,10 @@ bool compile(char *inputFileName, char *outputFileName)
 
     fclose(inputFile);
     free(fileName);
+
+    // DEBUG
+    printDebug();
+    // DEBUG
 
     return true;
 }

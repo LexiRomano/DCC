@@ -155,7 +155,7 @@ typedef enum
 {
     typeExtension_e,
     typeStructDefinition_e,
-    typeEnumDefinition_e
+    typeEnumDefinition_e 
 } typedefType_e;
 
 typedef struct typedef_t

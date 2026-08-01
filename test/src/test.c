@@ -3,18 +3,13 @@
 uint8_t something;
 unsigned short int myVar;
 
+short unsigned int something();
 
-void myFunc(int param1, unsigned char param2, unsigned short int param3)
+void myFunc(int param1, unsigned char param2, uint8_t param3)
 {
     int a;
     int b;
 
-    a = 12;
-
-    if (a == 12)
-    {
-        printf("Hello, world!");
-    }
 }
 
 uint8_t anotherOne;
