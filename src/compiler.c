@@ -18,7 +18,7 @@ char *g_keywords[] =
 {
     "int", "char", "do", "while", "for", "if", "else", "const",
     "static", "return", "continue", "break", "typedef", "struct",
-    "void", "NULL", "unsigned",
+    "void", "NULL", "unsigned" "switch", "case",
     NULL
 };
 
@@ -504,19 +504,20 @@ static void doTypedef()
 }
 
 // The opening "{" has already been parsed
-static void processStackFrame(stackFrame_t *stackFrame)
+static bool processStackFrame(stackFrame_t *stackFrame)
 {
     char *token = NULL;
     bool  rc    = true;
 
-    stackFrame_t *tmpStackFrame = NULL;
-    variable_t   *tmpVar        = NULL;
-    type_t       *tmpType       = NULL;
+    stackFrame_t    *tmpStackFrame    = NULL;
+    variable_t      *tmpVar           = NULL;
+    type_t          *tmpType          = NULL;
+    voidContainer_t *tmpVoidContainer = NULL;
 
     if (NULL == stackFrame)
     {
         INTERNAL_ERROR;
-        return;
+        return false;
     }
 
     while (true)
@@ -533,7 +534,7 @@ static void processStackFrame(stackFrame_t *stackFrame)
         if (NULL == token)
         {
             printError("Expected \"}\"");
-            return;
+            return false;
         }
 
         if (0 == strcmp("}", token))
@@ -543,7 +544,7 @@ static void processStackFrame(stackFrame_t *stackFrame)
 
             if (rc)
             {
-                return;
+                return true;
             }
             break;
         }
@@ -578,13 +579,40 @@ static void processStackFrame(stackFrame_t *stackFrame)
             printError("while statements not implemented");
             break;
         }
+        if (0 == strcmp("switch", token))
+        {
+            //TODO
+            printError("switch statements not implemented");
+            break;
+        }
 
         if (0 == strcmp("{", token))
         {
             free(token);
+            token = NULL;
             tmpStackFrame = calloc(1, sizeof(*stackFrame));
             tmpStackFrame->prevAccessableStackFrame = stackFrame;
-            processStackFrame(tmpStackFrame);
+            if (processStackFrame(tmpStackFrame))
+            {
+                tmpVoidContainer = addVoidContainer(&stackFrame->codeBlock);
+
+                if (NULL == tmpVoidContainer)
+                {
+                    INTERNAL_ERROR;
+                    continue;
+                }
+
+                tmpVoidContainer->data = tmpStackFrame;
+                tmpStackFrame = NULL;
+                tmpVoidContainer->type = stackFrame_e;
+            }
+            else
+            {
+                free(tmpStackFrame);
+                tmpStackFrame = NULL;
+                rc = false;
+            }
+
             continue;
         }
 
@@ -617,6 +645,7 @@ static void processStackFrame(stackFrame_t *stackFrame)
                 free(tmpType);
                 tmpType = NULL;
                 drainToNextSemicolon();
+                rc = false;
                 continue;
             }
 
@@ -678,6 +707,9 @@ static void processStackFrame(stackFrame_t *stackFrame)
     drainToEndOfBlock(true);
     freeVoidListContents(&(stackFrame->codeBlock));
     freeVariableList(&(stackFrame->variables));
+    error = true;
+
+    return false;
 }
 
 // The opening "(" has already been parsed
@@ -942,7 +974,7 @@ static bool intake()
 
                 foundType = tmpType;
                 tmpType   = NULL;
-                
+
                 applyVarDescriptors(isShort, isUnsigned, foundType);
 
                 continue;
@@ -1031,17 +1063,17 @@ static void DEBUG_printType(type_t *t)
             }
             case uint_e:
             {
-                printf("uint");
+                printf("unsigned int");
                 break;
             }
             case hint_e:
             {
-                printf("hint");
+                printf("short int");
                 break;
             }
             case huint_e:
             {
-                printf("huint");
+                printf("unsigned short int");
                 break;
             }
             case char_e:
@@ -1051,7 +1083,7 @@ static void DEBUG_printType(type_t *t)
             }
             case uchar_e:
             {
-                printf("uchar");
+                printf("unsigned char");
                 break;
             }
             default:
@@ -1109,6 +1141,33 @@ static void DEBUG_printStackFrame(int padding, stackFrame_t *sf)
             printf ("%s is of type ", v->identifier);
             DEBUG_printType(&v->type);
             printf("\n");
+        }
+    }
+    DEBUG_printPadding(padding);
+    printf("code block:\n");
+    if (NULL == sf->codeBlock.firstItem)
+    {
+        DEBUG_printPadding(padding + 2);
+        printf("NONE\n");
+    }
+    else
+    {
+        for (voidContainer_t *vc = sf->codeBlock.firstItem; NULL != vc; vc = vc->nextVoidContainer)
+        {
+            DEBUG_printPadding(padding + 2);
+            switch (vc->type)
+            {
+                case stackFrame_e:
+                {
+                    printf("stack frame:\n");
+                    DEBUG_printStackFrame(padding + 4, vc->data);
+                    break;
+                }
+                default:
+                {
+                    printf("unknown\n");
+                }
+            }
         }
     }
 }

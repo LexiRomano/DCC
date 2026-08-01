@@ -368,6 +368,21 @@ char *getNextTokenFromFile(FILE *file, int *lineNumber)
                   outputBuffer);
 }
 
+char *peekNextTokenFromFile(FILE *file)
+{
+    char *ret     = NULL;
+    int   trash   = 0;
+    int   restore = 0;
+
+    restore = ftell(file);
+
+    ret = getNextTokenFromFile(file, &trash);
+
+    fseek(file, restore, SEEK_SET);
+
+    return ret;
+}
+
 bool isolateFileName(char *in, char **out)
 {
     int  rawNameStart = 0;
@@ -760,6 +775,31 @@ void freeVariableList(variableList_t *varList)
         free(cur);
         cur = nxt;
     }
+}
+
+voidContainer_t *addVoidContainer(voidList_t *vl)
+{
+    voidContainer_t *vc = NULL;
+
+    if (NULL == vl)
+    {
+        return NULL;
+    }
+
+    vc = calloc(1, sizeof(*vc));
+
+    if (NULL == vl->firstItem)
+    {
+        vl->firstItem = vc;
+        vl->lastItem  = vc;
+
+        return vc;
+    }
+
+    vl->lastItem->nextVoidContainer = vc;
+    vl->lastItem                    = vc;
+
+    return vc;
 }
 
 void freeVoidListContents(voidList_t *vl)

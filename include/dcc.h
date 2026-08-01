@@ -40,6 +40,7 @@ bool isCharForIdent(char c);
 bool isCharForIdentNoNum(char c);
 char *getNextTokenFromBuf(char *buf, int bufSize, bool tokenizeAngleBrackets, int *startIndex);
 char *getNextTokenFromFile(FILE *file, int *lineNumber);
+char *peekNextTokenFromFile(FILE *file);
 bool isolateFileName(char *in, char **out);
 bool isolateFileNameWithExtension(char *in, char **out);
 bool stringStartsWith(char *str, char c);
@@ -61,6 +62,7 @@ void freeFunctionContents(function_t *func);
 variable_t *findVariable(variableList_t *varList, char *ident);
 void freeVariableList(variableList_t *varList);
 
+voidContainer_t *addVoidContainer(voidList_t *vl);
 void freeVoidListContents(voidList_t *vl);
 
 #endif //__DCC_H__
