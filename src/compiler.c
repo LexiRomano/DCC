@@ -679,6 +679,7 @@ static bool bubbleUpExpression(expression_t **root,
 
     if (false == getOperation(new, &newOp))
     {
+        printf("A\n");
         return false;
     }
 
@@ -686,6 +687,7 @@ static bool bubbleUpExpression(expression_t **root,
     {
         if (false == getOperation(e, &eOp))
         {
+            printf("B\n");
             return false;
         }
 
@@ -697,6 +699,7 @@ static bool bubbleUpExpression(expression_t **root,
         if (false == getDesiredSwapPoint(e, &relocate) ||
             false == getEmptyExpression(new, &insert))
         {
+            printf("C\n");
             return false;
         }
 
@@ -712,6 +715,7 @@ static bool bubbleUpExpression(expression_t **root,
 
     if (false == getEmptyExpression(new, &insert))
     {
+        printf("D\n");
         return false;
     }
 
@@ -730,6 +734,7 @@ static bool parseExpression(stackFrame_t  *stackFrame,
     char          *token   = NULL;
     variable_t    *tmpVar  = NULL;
     expression_t  *newExp  = NULL;
+    expression_t  *newExp2 = NULL;
     expression_t **insert  = NULL;
 
     if (NULL == root)
@@ -754,6 +759,70 @@ static bool parseExpression(stackFrame_t  *stackFrame,
         rewindTokenParse();
         free(token);
         return true;
+    }
+
+    if (0 == strcmp("(", token))
+    {
+        free(token);
+        token = NULL;
+
+        if (NULL != prevExp &&
+            false == getEmptyExpression(prevExp, &insert))
+        {
+            // Never got inserted into the tree, need to free here
+            // This would be dealing with function pointers... let's not x_X
+            drainToEndOfParenthasis(true);
+            printError("function pointers not implemented");
+            return false;
+        }
+
+        if (false == parseExpression(stackFrame, &newExp2, NULL))
+        {
+            if (NULL != newExp2)
+            {
+                free(newExp2);
+                return false;
+            }
+        }
+
+        if (NULL == newExp2)
+        {
+            printError("expected expression before \")\"");
+            drainToEndOfParenthasis(true);
+            return false;
+        }
+
+        token = getNextTokenCheckingForLineChange();
+
+        if (NULL == token ||
+            0    != strcmp(")", token))
+        {
+            printErrorArgs("expected \")\", got \"%s\"", token);
+            free(newExp2); //TODO make recursive free
+            free(token);
+            return false;
+        }
+
+        free(token);
+
+        newExp = calloc(1, sizeof(*newExp));
+        newExp->type = et_unary_e;
+        newExp->contents.unary.operation = op_parenthesis_e;
+        newExp->contents.unary.operand   = (struct expression_t*) newExp2;
+
+        if (NULL == insert)
+        {
+            // First statement
+            *root = newExp;
+        }
+        else
+        {
+            *insert = newExp;
+            newExp->parent = (struct expression_t*) prevExp;
+        }
+
+        goto checkForEnd;
+
     }
 
     // Special handling required for certain operators before the generic loop
@@ -1391,7 +1460,7 @@ static bool processStackFrame(stackFrame_t *stackFrame)
 
         if (NULL == token)
         {
-            printError("Expected \"}\"");
+            printError("expected \"}\"");
             return false;
         }
 
@@ -2127,6 +2196,11 @@ static void DEBUG_printExpression(expression_t *exp)
                     printf("<%s", operatorTokens[exp->contents.unary.operation]);
                     DEBUG_printExpression((expression_t*) exp->contents.unary.operand);
                     printf(">");
+                    break;
+                }
+                case op_parenthesis_e:
+                {
+                    DEBUG_printExpression((expression_t*) exp->contents.unary.operand);
                     break;
                 }
                 default:

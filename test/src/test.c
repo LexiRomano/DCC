@@ -12,7 +12,7 @@ void myFunc(int param1, unsigned char param2, uint8_t param3)
     char               c;
     unsigned short int d;
 
-    b + a == c * d;
+    (b - a) * (a == c) * d;
 
     myVar += ++something + b * c - myVar;
 
