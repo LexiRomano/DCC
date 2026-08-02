@@ -120,6 +120,11 @@ typedef enum
 
     // 16
     op_assignment_e,
+    op_addAssignment_e,
+    op_subtractAssignment_e,
+    op_multiplyAssignment_e,
+    op_divideAssignment_e,
+    op_modulusAssignment_e,
 
     op_count_e, // sentinel
 } operation_e;

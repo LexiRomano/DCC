@@ -75,7 +75,12 @@ static int operatorPrecedence[] =
 
     15, // op_conditional_e
 
-    16  // op_assignment_e
+    16, // op_assignment_e
+    16, // op_addAssignment_e
+    16, // op_subtractAssignment_e
+    16, // op_multiplyAssignment_e
+    16, // op_divideAssignment_e
+    16, // op_modulusAssignment_e
 };
 
 // Special cases are left empty
@@ -118,6 +123,11 @@ static char *operatorTokens[] =
     "||", // op_logicalOr_e
     "",   // op_conditional_e
     "=",  // op_assignment_e
+    "+=", // op_addAssignment_e
+    "-=", // op_subtractAssignment_e
+    "*=", // op_multiplyAssignment_e
+    "/=", // op_divideAssignment_e
+    "%=", // op_modulusAssignment_e
 };
 
 // Special cases as shown above are not important
@@ -160,6 +170,11 @@ static bool operatorAttatchLeft[] =
     true,  // op_logicalOr_e
     true,  // op_conditional_e
     false, // op_assignment_e
+    false, // op_addAssignment_e
+    false, // op_subtractAssignment_e
+    false, // op_multiplyAssignment_e
+    false, // op_divideAssignment_e
+    false, // op_modulusAssignment_e
 };
 
 // Special cases as shown above are not important
@@ -202,6 +217,11 @@ static int operatorOperandCount[] =
     2, // op_logicalOr_e
     0, // op_conditional_e
     2, // op_assignment_e
+    2, // op_addAssignment_e
+    2, // op_subtractAssignment_e
+    2, // op_multiplyAssignment_e
+    2, // op_divideAssignment_e
+    2, // op_modulusAssignment_e
 };
 
 static char *getNextTokenCheckingForLineChange()
@@ -480,8 +500,8 @@ static bool getOperation(expression_t *exp,
     return true;
 }
 
-static bool getRightmostExpression(expression_t   *in,
-                                   expression_t ***out)
+static bool getDesiredSwapPoint(expression_t   *in,
+                                expression_t ***out)
 {
     if (NULL == in ||
         NULL == out)
@@ -498,7 +518,14 @@ static bool getRightmostExpression(expression_t   *in,
         }
         case et_binary_e:
         {
-            *out = (expression_t**) &in->contents.binary.operand2;
+            if (false == operatorAttatchLeft[in->contents.binary.operation])
+            {
+                *out = (expression_t**) &in->contents.binary.operand1;
+            }
+            else
+            {
+                *out = (expression_t**) &in->contents.binary.operand2;
+            }
             break;
         }
         case et_trinary_e:
@@ -537,15 +564,31 @@ static bool getEmptyExpression(expression_t   *in,
         }
         case et_binary_e:
         {
-            if (NULL == in->contents.binary.operand1)
+            if (false == operatorAttatchLeft[in->contents.binary.operation])
             {
-                *out = (expression_t**) &in->contents.binary.operand1;
-                return true;
+                if (NULL == in->contents.binary.operand2)
+                {
+                    *out = (expression_t**) &in->contents.binary.operand2;
+                    return true;
+                }
+                if (NULL == in->contents.binary.operand1)
+                {
+                    *out = (expression_t**) &in->contents.binary.operand1;
+                    return true;
+                }
             }
-            if (NULL == in->contents.binary.operand2)
+            else
             {
-                *out = (expression_t**) &in->contents.binary.operand2;
-                return true;
+                if (NULL == in->contents.binary.operand1)
+                {
+                    *out = (expression_t**) &in->contents.binary.operand1;
+                    return true;
+                }
+                if (NULL == in->contents.binary.operand2)
+                {
+                    *out = (expression_t**) &in->contents.binary.operand2;
+                    return true;
+                }
             }
             break;
         }
@@ -609,14 +652,17 @@ static bool bubbleUpExpression(expression_t **root,
             continue;
         }
 
-        if (false == getRightmostExpression(e, &relocate) ||
+        if (false == getDesiredSwapPoint(e, &relocate) ||
             false == getEmptyExpression(new, &insert))
         {
             return false;
         }
 
         *insert = *relocate;
-        (*relocate)->parent = (struct expression_t*) new;
+        if (NULL != (*relocate))
+        {
+            (*relocate)->parent = (struct expression_t*) new;
+        }
         *relocate = new;
         new->parent = (struct expression_t*) e;
         return true;
@@ -639,10 +685,10 @@ static bool parseExpression(stackFrame_t  *stackFrame,
                             expression_t **root,
                             expression_t  *prevExp)
 {
-    char          *token  = NULL;
-    variable_t    *tmpVar = NULL;
-    expression_t  *newExp = NULL;
-    expression_t **insert = NULL;
+    char          *token   = NULL;
+    variable_t    *tmpVar  = NULL;
+    expression_t  *newExp  = NULL;
+    expression_t **insert  = NULL;
 
     if (NULL == root)
     {
@@ -664,23 +710,19 @@ static bool parseExpression(stackFrame_t  *stackFrame,
     {
         if (0 == strcmp(operatorTokens[op], token))
         {
-            if (operatorAttatchLeft[op] &&
-                2 == operatorOperandCount[op])
+            if (2 == operatorOperandCount[op])
             {
-                // <complete statement> + ...
+                // <complete statement> + <complete statement>
                 if (NULL == prevExp ||
                     true == expressionRequiresOperand(prevExp))
                 {
                     printErrorArgs("\"%s\" requires preceding statement", token);
+                    free(token);
                     return false;
                 }
 
-                free(token);
-                token = NULL;
-
                 newExp = calloc(1, sizeof(*newExp));
-                newExp->type   = et_binary_e;
-
+                newExp->type = et_binary_e;
                 newExp->contents.binary.operation = op;
 
                 if (NULL == *root)
@@ -691,12 +733,114 @@ static bool parseExpression(stackFrame_t  *stackFrame,
                 {
                     // Never got inserted into the tree, need to free here
                     free(newExp);
+                    free(token);
                     return false;
                 }
 
-                return parseExpression(stackFrame,
-                                       root,
-                                       newExp);
+                if (false == parseExpression(stackFrame, root, newExp))
+                {
+                    free(token);
+                    return false;
+                }
+
+                if (expressionRequiresOperand(newExp))
+                {
+                    printErrorArgs("expected statement after \"%s\"", token);
+                    free(token);
+                    return false;
+                }
+
+                free(token);
+                return true;
+            }
+
+            if (operatorAttatchLeft[op] &&
+                1 == operatorOperandCount[op])
+            {
+                // <complete statement> ++ [...]
+
+                if (NULL == *root   ||
+                    NULL == prevExp ||
+                    true == expressionRequiresOperand(prevExp))
+                {
+                    if (op == op_postIncrement_e ||
+                        op == op_postDecrement_e)
+                    {
+                        // Treat as pre-decrement, keep going
+                        continue;
+                    }
+
+                    printErrorArgs("\"%s\" requires preceding statement", token);
+                    free(token);
+                    return false;
+                }
+
+                free(token);
+                token = NULL;
+
+                newExp = calloc(1, sizeof(*newExp));
+                newExp->type = et_unary_e;
+                newExp->contents.unary.operation = op;
+
+                if (false == bubbleUpExpression(root, prevExp, newExp))
+                {
+                    // Never got inserted into the tree, need to free here
+                    free(newExp);
+                    return false;
+                }
+
+                goto checkForEnd;
+            }
+
+            if (false == operatorAttatchLeft[op] &&
+                1     == operatorOperandCount[op])
+            {
+                // [...] ++<complete statement>
+
+                if (NULL  != prevExp &&
+                    false == expressionRequiresOperand(prevExp))
+                {
+                    if (op == op_dereference_e)
+                    {
+                        // Should instead be multiplication
+                        continue;
+                    }
+                    printErrorArgs("\"%s\" cannot precede a complete statement", token);
+                    free(token);
+                    return false;
+                }
+
+                newExp = calloc(1, sizeof(*newExp));
+                newExp->type = et_unary_e;
+                newExp->contents.unary.operation = op;
+
+                if (NULL == *root)
+                {
+                    *root = newExp;
+                }
+                else if (false == bubbleUpExpression(root, prevExp, newExp))
+                {
+                    // Never got inserted into the tree, need to free here
+                    free(newExp);
+                    free(token);
+                    return false;
+                }
+
+                if (false == parseExpression(stackFrame, root, newExp))
+                {
+                    free(token);
+                    return false;
+                }
+
+                if (expressionRequiresOperand(newExp))
+                {
+                    printErrorArgs("expected statement after \"%s\"", token);
+                    free(token);
+                    return false;
+                }
+
+                free(token);
+                return true;
             }
         }
     }
@@ -754,6 +898,12 @@ static bool parseExpression(stackFrame_t  *stackFrame,
         free(token);
 
         return false;
+    }
+
+    if (0 == strcmp(";", token))
+    {
+        free(token);
+        return true;
     }
 
     printErrorArgs("something's wrong with \"%s\"", token);
@@ -1264,6 +1414,11 @@ static bool processStackFrame(stackFrame_t *stackFrame)
         if (false == parseExpression(stackFrame, &newExpression, NULL))
         {
             drainToNextSemicolon();
+            if (NULL != newExpression)
+            {
+                free(newExpression); //TODO make freeExpression when that exists
+                newExpression = NULL;
+            }
             continue;
         }
 
@@ -1732,7 +1887,32 @@ static void DEBUG_printExpression(expression_t *exp)
         }
         case et_unary_e:
         {
-            printf("UNARY NOT IMPLEMENTED");
+            switch (exp->contents.unary.operation)
+            {
+                case op_postIncrement_e:
+                case op_postDecrement_e:
+                {
+                    printf("<");
+                    DEBUG_printExpression((expression_t*) exp->contents.unary.operand);
+                    printf("%s>", operatorTokens[exp->contents.unary.operation]);
+                    break;
+                }
+                case op_preIncrement_e:
+                case op_preDecrement_e:
+                case op_dereference_e:
+                case op_reference_e:
+                {
+                    printf("<%s", operatorTokens[exp->contents.unary.operation]);
+                    DEBUG_printExpression((expression_t*) exp->contents.unary.operand);
+                    printf(">");
+                    break;
+                }
+                default:
+                {
+                    printf("UNARY OPERATOR NOT SUPORTED");
+                    return;
+                }
+            }
             return;
         }
         case et_binary_e:
@@ -1740,6 +1920,10 @@ static void DEBUG_printExpression(expression_t *exp)
             printf("<");
             DEBUG_printExpression((expression_t*) exp->contents.binary.operand1);
             printf(" %s ", operatorTokens[exp->contents.binary.operation]);
+            if (false == operatorAttatchLeft[exp->contents.binary.operation])
+            {
+                printf("to ");
+            }
             DEBUG_printExpression((expression_t*) exp->contents.binary.operand2);
             printf(">");
             return;

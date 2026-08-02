@@ -14,7 +14,7 @@ void myFunc(int param1, unsigned char param2, uint8_t param3)
 
     b + a == c * d;
 
-    something + b * c - myVar;
+    myVar += ++something + b * c - myVar;
 
     {
         char z;

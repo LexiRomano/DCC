@@ -14,6 +14,11 @@ static const char *specialTokens[] = {
     "||",
     "->",
     "//",
+    "+=",
+    "-=",
+    "*=",
+    "/=",
+    "%=",
     NULL
 };
 
@@ -340,7 +345,7 @@ char *getNextTokenFromFile(FILE *file, int *lineNumber)
                     if (specialTokens[j][0] == currentChar &&
                         specialTokens[j][1] == (char)readValue)
                     {
-                        outputBuffer[i++] = currentChar;
+                        outputBuffer[i++] = (char)readValue;
                         fseek(file, 1, SEEK_CUR);
                         break;
                     }
