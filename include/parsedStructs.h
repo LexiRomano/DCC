@@ -54,6 +54,8 @@ typedef enum
 {
     // 1
     op_parenthesis_e,
+    op_variable_e,
+    op_literal_e,
 
     // 2
     op_arrayIndexing_e,

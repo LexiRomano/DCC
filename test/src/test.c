@@ -3,16 +3,24 @@
 uint8_t something;
 unsigned short int myVar;
 
-short unsigned int something();
+short unsigned int emptyFunc();
 
 void myFunc(int param1, unsigned char param2, uint8_t param3)
 {
-    int a;
-    int b;
-    int c;
-    int z;
+    int                a;
+    uint8_t            b;
+    char               c;
+    unsigned short int d;
 
-    z * a + b - c + a;
+    b + a == c * d;
+
+    something + b * c - myVar;
+
+    {
+        char z;
+
+        z - b * a + something;
+    }
 }
 
 uint8_t anotherOne;

@@ -22,10 +22,11 @@ char *g_keywords[] =
     NULL
 };
 
-/*
 static int operatorPrecedence[] =
 {
     1,  // op_parenthesis_e
+    1,  // op_variable_e
+    1,  // op_literal_e
 
     2,  // op_arrayIndexing_e
     2,  // op_functionCall_e
@@ -75,12 +76,14 @@ static int operatorPrecedence[] =
     15, // op_conditional_e
 
     16  // op_assignment_e
-};*/
+};
 
 // Special cases are left empty
 static char *operatorTokens[] =
 {
     "",   // op_parenthesis_e
+    "",   // op_variable_e
+    "",   // op_literal_e
     "",   // op_arrayIndexing_e
     "",   // op_functionCall_e
     "",   // op_memberAccess_e
@@ -121,6 +124,8 @@ static char *operatorTokens[] =
 static bool operatorAttatchLeft[] =
 {
     true,  // op_parenthesis_e
+    true,  // op_variable_e
+    true,  // op_literal_e
     true,  // op_arrayIndexing_e
     true,  // op_functionCall_e
     true,  // op_memberAccess_e
@@ -161,6 +166,8 @@ static bool operatorAttatchLeft[] =
 static int operatorOperandCount[] =
 {
     0, // op_parenthesis_e
+    0, // op_variable_e
+    0, // op_literal_e
     0, // op_arrayIndexing_e
     0, // op_functionCall_e
     0, // op_memberAccess_e
@@ -433,19 +440,211 @@ static bool expressionRequiresOperand(expression_t *exp)
     }
 }
 
-static bool parseExpression(stackFrame_t  *stackFrame,
-                            expression_t **newExp,
-                            expression_t  *prevExp)
+static bool getOperation(expression_t *exp,
+                         operation_e  *out)
 {
-    char       *token  = NULL;
-    variable_t *tmpVar = NULL;
+    if (NULL == exp ||
+        NULL == out)
+    {
+        return false;
+    }
 
-    if (NULL ==  newExp)
+    switch (exp->type)
+    {
+        case et_unary_e:
+        {
+            *out = exp->contents.unary.operation;
+            break;
+        }
+        case et_binary_e:
+        {
+            *out = exp->contents.binary.operation;
+            break;
+        }
+        case et_trinary_e:
+        {
+            *out = exp->contents.trinary.operation;
+            break;
+        }
+        case et_variable_e:
+        {
+            *out = op_variable_e;
+            break;
+        }
+        default:
+        {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+static bool getRightmostExpression(expression_t   *in,
+                                   expression_t ***out)
+{
+    if (NULL == in ||
+        NULL == out)
+    {
+        return false;
+    }
+
+    switch (in->type)
+    {
+        case et_unary_e:
+        {
+            *out = (expression_t**) &in->contents.unary.operand;
+            break;
+        }
+        case et_binary_e:
+        {
+            *out = (expression_t**) &in->contents.binary.operand2;
+            break;
+        }
+        case et_trinary_e:
+        {
+            *out = (expression_t**) &in->contents.trinary.operand3;
+            break;
+        }
+        default:
+        {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+static bool getEmptyExpression(expression_t   *in,
+                               expression_t ***out)
+{
+    if (NULL == in ||
+        NULL == out)
+    {
+        return false;
+    }
+
+    switch (in->type)
+    {
+        case et_unary_e:
+        {
+            if (NULL == in->contents.unary.operand)
+            {
+                *out = (expression_t**) &in->contents.unary.operand;
+                return true;
+            }
+            break;
+        }
+        case et_binary_e:
+        {
+            if (NULL == in->contents.binary.operand1)
+            {
+                *out = (expression_t**) &in->contents.binary.operand1;
+                return true;
+            }
+            if (NULL == in->contents.binary.operand2)
+            {
+                *out = (expression_t**) &in->contents.binary.operand2;
+                return true;
+            }
+            break;
+        }
+        case et_trinary_e:
+        {
+            if (NULL == in->contents.trinary.operand1)
+            {
+                *out = (expression_t**) &in->contents.trinary.operand1;
+            }
+            if (NULL == in->contents.trinary.operand2)
+            {
+                *out = (expression_t**) &in->contents.trinary.operand2;
+            }
+            if (NULL == in->contents.trinary.operand3)
+            {
+                *out = (expression_t**) &in->contents.trinary.operand3;
+            }
+            break;
+        }
+        default:
+        {
+            return false;
+        }
+    }
+
+    return false;
+}
+
+static bool bubbleUpExpression(expression_t **root,
+                               expression_t  *current,
+                               expression_t  *new)
+{
+    operation_e    eOp      = 0;
+    operation_e    newOp    = 0;
+    expression_t **relocate = NULL;
+    expression_t **insert   = NULL;
+
+    if (NULL == root    ||
+        NULL == *root   ||
+        NULL == current ||
+        NULL == new)
     {
         INTERNAL_ERROR;
         return false;
     }
-    if (NULL != *newExp)
+
+    if (false == getOperation(new, &newOp))
+    {
+        return false;
+    }
+
+    for (expression_t *e = current; NULL != e; e = (expression_t*) e->parent)
+    {
+        if (false == getOperation(e, &eOp))
+        {
+            return false;
+        }
+
+        if (operatorPrecedence[eOp] <= operatorPrecedence[newOp])
+        {
+            continue;
+        }
+
+        if (false == getRightmostExpression(e, &relocate) ||
+            false == getEmptyExpression(new, &insert))
+        {
+            return false;
+        }
+
+        *insert = *relocate;
+        (*relocate)->parent = (struct expression_t*) new;
+        *relocate = new;
+        new->parent = (struct expression_t*) e;
+        return true;
+    }
+
+    if (false == getEmptyExpression(new, &insert))
+    {
+        return false;
+    }
+
+    *insert = *root;
+    (*root)->parent = (struct expression_t*) new;
+    *root = new;
+
+    return true;
+}
+
+// Caller must still free the root structure on failure
+static bool parseExpression(stackFrame_t  *stackFrame,
+                            expression_t **root,
+                            expression_t  *prevExp)
+{
+    char          *token  = NULL;
+    variable_t    *tmpVar = NULL;
+    expression_t  *newExp = NULL;
+    expression_t **insert = NULL;
+
+    if (NULL == root)
     {
         INTERNAL_ERROR;
         return false;
@@ -479,39 +678,73 @@ static bool parseExpression(stackFrame_t  *stackFrame,
                 free(token);
                 token = NULL;
 
-                *newExp = calloc(1, sizeof(**newExp));
-                (*newExp)->parent = prevExp->parent;
-                (*newExp)->type   = et_binary_e;
+                newExp = calloc(1, sizeof(*newExp));
+                newExp->type   = et_binary_e;
 
-                (*newExp)->contents.binary.operation = op;
-                (*newExp)->contents.binary.operand1  = (struct expression_t *) prevExp;
+                newExp->contents.binary.operation = op;
 
-                if (false == parseExpression(stackFrame,
-                                             (expression_t **)&(*newExp)->contents.binary.operand2,
-                                             *newExp))
+                if (NULL == *root)
                 {
+                    *root = newExp;
+                }
+                else if (false == bubbleUpExpression(root, prevExp, newExp))
+                {
+                    // Never got inserted into the tree, need to free here
+                    free(newExp);
                     return false;
+                }
+
+                return parseExpression(stackFrame,
+                                       root,
+                                       newExp);
+            }
+        }
+    }
+
+    if (NULL != *root &&
+        false == expressionRequiresOperand(prevExp))
+    {
+        printErrorArgs("expected operator or \";\" instead of %s", token);
+        free(token);
+        return false;
+    }
+
+    if (isIdentifier(token))
+    {
+        for (stackFrame_t *sf = stackFrame; NULL != sf; sf = sf->prevAccessableStackFrame)
+        {
+            if (NULL != (tmpVar = findVariable(&sf->variables, token)))
+            {
+                foundVariable:
+                free(token);
+                newExp = calloc(1, sizeof(*newExp));
+                newExp->parent = (struct expression_t*) prevExp;
+                newExp->type   = et_variable_e;
+                newExp->contents.variable = tmpVar;
+
+                if (NULL == *root)
+                {
+                    *root = newExp;
+                }
+                else if (false == getEmptyExpression(prevExp, &insert))
+                {
+                    // Should have already checked for this
+                    free(newExp);
+                    INTERNAL_ERROR;
+                    return false;
+                }
+                else
+                {
+                    *insert = newExp;
                 }
 
                 goto checkForEnd;
             }
         }
-    }
 
-    if (isIdentifier(token))
-    {
-
-        for (stackFrame_t *sf = stackFrame; NULL != sf; sf = sf->prevAccessableStackFrame)
+        if (NULL != (tmpVar = findVariable(&globalVariables, token)))
         {
-            if (NULL != (tmpVar = findVariable(&sf->variables, token)))
-            {
-                *newExp = calloc(1, sizeof(**newExp));
-                (*newExp)->parent = (struct expression_t*) prevExp;
-                (*newExp)->type   = et_variable_e;
-                (*newExp)->contents.variable = tmpVar;
-
-                goto checkForEnd;
-            }
+            goto foundVariable;
         }
 
         // TODO function calls
@@ -539,11 +772,8 @@ static bool parseExpression(stackFrame_t  *stackFrame,
     }
 
     free(token);
-
-    expression_t *tmpExpression = *newExp;
-    *newExp = NULL;
     
-    return parseExpression(stackFrame, newExp, tmpExpression);
+    return parseExpression(stackFrame, root, newExp);
 }
 
 static bool createVariable(type_t *varType,
@@ -1580,9 +1810,10 @@ static void DEBUG_printStackFrame(int padding, stackFrame_t *sf)
                 }
                 case expression_e:
                 {
-                    printf("expression:\n");
-                    DEBUG_printPadding(padding + 4);
+                    printf("expression: ");
+                    //DEBUG_printPadding(padding + 4);
                     DEBUG_printExpression(vc->data);
+                    printf("\n");
                     break;
                 }
                 default:

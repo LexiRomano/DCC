@@ -341,6 +341,7 @@ char *getNextTokenFromFile(FILE *file, int *lineNumber)
                         specialTokens[j][1] == (char)readValue)
                     {
                         outputBuffer[i++] = currentChar;
+                        fseek(file, 1, SEEK_CUR);
                         break;
                     }
                 }
