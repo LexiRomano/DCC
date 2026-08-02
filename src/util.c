@@ -1,5 +1,22 @@
 #include "dcc.h"
 
+// Must all be 2 char long
+static const char *specialTokens[] = {
+    "++",
+    "--",
+    "<<",
+    ">>",
+    "==",
+    "!=",
+    ">=",
+    "<=",
+    "&&",
+    "||",
+    "->",
+    "//",
+    NULL
+};
+
 int findFirstNonWhitespace(char *buf, int length)
 {
     if (NULL == buf)
@@ -154,6 +171,15 @@ char *getNextTokenFromBuf(char *buf, int bufSize, bool tokenizeAngleBrackets, in
             else if (false == isCharForIdent(buf[i]))
             {
                 end = i;
+                for (int j = 0; NULL != specialTokens[j]; j++)
+                {
+                    if (specialTokens[j][0] == buf[i] &&
+                        specialTokens[j][1] == buf[i + 1])
+                    {
+                        end = i + 1;
+                        break;
+                    }
+                }
                 break;
             }
 
@@ -301,6 +327,23 @@ char *getNextTokenFromFile(FILE *file, int *lineNumber)
             else if (false == isCharForIdent(currentChar))
             {
                 outputBuffer[i++] = currentChar;
+                readValue = fgetc(file);
+
+                if (EOF == readValue)
+                {
+                    break;
+                }
+
+                fseek(file, -1, SEEK_CUR);
+                for (int j = 0; NULL != specialTokens[j]; j++)
+                {
+                    if (specialTokens[j][0] == currentChar &&
+                        specialTokens[j][1] == (char)readValue)
+                    {
+                        outputBuffer[i++] = currentChar;
+                        break;
+                    }
+                }
                 break;
             }
 

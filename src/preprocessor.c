@@ -314,9 +314,12 @@ static bool preprocessFile(FILE *inputFile, char *inputFileName)
                                                     false,
                                                     &tokenStartIndex)))
         {
-            // We need to leave a space aftertokens which are identifiers
-            // so something like "static void functionName()" doesn't
-            // become "staticvoidfunctionName()"
+            if (0 == strcmp("//", token))
+            {
+                free(token);
+                break;
+            }
+
             if (isCharForIdent(token[0]))
             {
                 if (isCharForIdentNoNum(token[0]))
@@ -335,7 +338,9 @@ static bool preprocessFile(FILE *inputFile, char *inputFileName)
             }
 
             // Just dump everything else
-            fprintf(outputFile, "%s", token);
+            fprintf(outputFile, "%s ", token);
+
+            free(token);
         }
 
         fprintf(outputFile, "\n");

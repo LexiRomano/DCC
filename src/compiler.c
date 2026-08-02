@@ -22,6 +22,181 @@ char *g_keywords[] =
     NULL
 };
 
+/*
+static int operatorPrecedence[] =
+{
+    1,  // op_parenthesis_e
+
+    2,  // op_arrayIndexing_e
+    2,  // op_functionCall_e
+    2,  // op_memberAccess_e
+    2,  // op_memberAccessPt_e
+    2,  // op_postIncrement_e
+    2,  // op_postDecrement_e
+
+    3,  // op_preIncrement_e
+    3,  // op_preDecrement_e
+    3,  // op_reference_e
+    3,  // op_dereference_e
+    3,  // op_bitwiseNot_e
+    3,  // op_logicalNot_e
+    3,  // op_negative_e
+
+    4,  // op_cast_e
+
+    5,  // op_multiplication_e
+    5,  // op_division_e
+    5,  // op_modulus_e
+
+    6,  // op_subtraction_e
+    6,  // op_addition_e
+
+    7,  // op_bitshiftLeft_e
+    7,  // op_bitshiftRight_e
+
+    8,  // op_lessThan_e
+    8,  // op_greaterThan_e
+    8,  // op_lessEqual_e
+    8,  // op_greaterEqual_e
+
+    9,  // op_equals_e
+    9,  // op_notEquals_e
+
+    10, // op_bitwiseAnd_e
+
+    11, // op_bitwiseXor_e
+
+    12, // op_bitwiseOr_e
+
+    13, // op_logicalAnd_e
+
+    14, // op_logicalOr_e
+
+    15, // op_conditional_e
+
+    16  // op_assignment_e
+};*/
+
+// Special cases are left empty
+static char *operatorTokens[] =
+{
+    "",   // op_parenthesis_e
+    "",   // op_arrayIndexing_e
+    "",   // op_functionCall_e
+    "",   // op_memberAccess_e
+    "",   // op_memberAccessPt_e
+    "++", // op_postIncrement_e
+    "--", // op_postDecrement_e
+    "++", // op_preIncrement_e
+    "--", // op_preDecrement_e
+    "&",  // op_reference_e
+    "*",  // op_dereference_e
+    "~",  // op_bitwiseNot_e
+    "!",  // op_logicalNot_e
+    "",   // op_negative_e
+    "",   // op_cast_e
+    "*",   // op_multiplication_e
+    "/",  // op_division_e
+    "%",  // op_modulus_e
+    "-",   // op_subtraction_e
+    "+",  // op_addition_e
+    "<<", // op_bitshiftLeft_e
+    ">>", // op_bitshiftRight_e
+    "<",  // op_lessThan_e
+    ">",  // op_greaterThan_e
+    "<=", // op_lessEqual_e
+    ">=", // op_greaterEqual_e
+    "==", // op_equals_e
+    "!=", // op_notEquals_e
+    "&",  // op_bitwiseAnd_e
+    "^",  // op_bitwiseXor_e
+    "|",  // op_bitwiseOr_e
+    "&&", // op_logicalAnd_e
+    "||", // op_logicalOr_e
+    "",   // op_conditional_e
+    "=",  // op_assignment_e
+};
+
+// Special cases as shown above are not important
+static bool operatorAttatchLeft[] =
+{
+    true,  // op_parenthesis_e
+    true,  // op_arrayIndexing_e
+    true,  // op_functionCall_e
+    true,  // op_memberAccess_e
+    true,  // op_memberAccessPt_e
+    true,  // op_postIncrement_e
+    true,  // op_postDecrement_e
+    false, // op_preIncrement_e
+    false, // op_preDecrement_e
+    false, // op_reference_e
+    false, // op_dereference_e
+    false, // op_bitwiseNot_e
+    false, // op_logicalNot_e
+    false, // op_negative_e
+    true,  // op_cast_e
+    true,  // op_multiplication_e
+    true,  // op_division_e
+    true,  // op_modulus_e
+    true,  // op_subtraction_e
+    true,  // op_addition_e
+    true,  // op_bitshiftLeft_e
+    true,  // op_bitshiftRight_e
+    true,  // op_lessThan_e
+    true,  // op_greaterThan_e
+    true,  // op_lessEqual_e
+    true,  // op_greaterEqual_e
+    true,  // op_equals_e
+    true,  // op_notEquals_e
+    true,  // op_bitwiseAnd_e
+    true,  // op_bitwiseXor_e
+    true,  // op_bitwiseOr_e
+    true,  // op_logicalAnd_e
+    true,  // op_logicalOr_e
+    true,  // op_conditional_e
+    false, // op_assignment_e
+};
+
+// Special cases as shown above are not important
+static int operatorOperandCount[] =
+{
+    0, // op_parenthesis_e
+    0, // op_arrayIndexing_e
+    0, // op_functionCall_e
+    0, // op_memberAccess_e
+    0, // op_memberAccessPt_e
+    1, // op_postIncrement_e
+    1, // op_postDecrement_e
+    1, // op_preIncrement_e
+    1, // op_preDecrement_e
+    1, // op_reference_e
+    1, // op_dereference_e
+    1, // op_bitwiseNot_e
+    1, // op_logicalNot_e
+    1, // op_negative_e
+    0, // op_cast_e
+    2, // op_multiplication_e
+    2, // op_division_e
+    2, // op_modulus_e
+    2, // op_subtraction_e
+    2, // op_addition_e
+    2, // op_bitshiftLeft_e
+    2, // op_bitshiftRight_e
+    2, // op_lessThan_e
+    2, // op_greaterThan_e
+    2, // op_lessEqual_e
+    2, // op_greaterEqual_e
+    2, // op_equals_e
+    2, // op_notEquals_e
+    2, // op_bitwiseAnd_e
+    2, // op_bitwiseXor_e
+    2, // op_bitwiseOr_e
+    2, // op_logicalAnd_e
+    2, // op_logicalOr_e
+    0, // op_conditional_e
+    2, // op_assignment_e
+};
+
 static char *getNextTokenCheckingForLineChange()
 {
     char *nextToken = getNextTokenFromFile(inputFile, &lineNumber);
@@ -162,16 +337,21 @@ static void printErrorDuplicateKeyword(char *keyword)
     error = true;
 }
 
-static void printError(char *message)
-{
-    char *line = getCurrentLine(inputFile);
+#define printError(msg)                   \
+do {                                       \
+    char *line = getCurrentLine(inputFile); \
+    ERROR(fileName, lineNumber, line, msg);  \
+    free(line);                               \
+    error = true;                              \
+} while (false)
 
-    ERROR_ARGS(fileName, lineNumber, line, "%s", message);
-
-    free(line);
-
-    error = true;
-}
+#define printErrorArgs(msg, ...)                      \
+do {                                                   \
+    char *line = getCurrentLine(inputFile);             \
+    ERROR_ARGS(fileName, lineNumber, line, msg, __VA_ARGS__); \
+    free(line);                                           \
+    error = true;                                          \
+} while (false)
 
 // Caller to free result
 static type_t *findType(char *str)
@@ -220,6 +400,150 @@ static type_t *findType(char *str)
     }
 
     return NULL;
+}
+
+static bool expressionRequiresOperand(expression_t *exp)
+{
+    if (NULL == exp)
+    {
+        return false;
+    }
+
+    switch (exp->type)
+    {
+        case et_unary_e:
+        {
+            return NULL == exp->contents.unary.operand;
+        }
+        case et_binary_e:
+        {
+            return NULL == exp->contents.binary.operand1 ||
+                   NULL == exp->contents.binary.operand2;
+        }
+        case et_trinary_e:
+        {
+            return NULL == exp->contents.trinary.operand1 ||
+                   NULL == exp->contents.trinary.operand2 ||
+                   NULL == exp->contents.trinary.operand3;
+        }
+        default:
+        {
+            return false;
+        }
+    }
+}
+
+static bool parseExpression(stackFrame_t  *stackFrame,
+                            expression_t **newExp,
+                            expression_t  *prevExp)
+{
+    char       *token  = NULL;
+    variable_t *tmpVar = NULL;
+
+    if (NULL ==  newExp)
+    {
+        INTERNAL_ERROR;
+        return false;
+    }
+    if (NULL != *newExp)
+    {
+        INTERNAL_ERROR;
+        return false;
+    }
+
+    token = getNextTokenCheckingForLineChange();
+
+    if (NULL == token)
+    {
+        printError("expected expression");
+        return false;
+    }
+
+    // Special handling required for certain operators before the generic loop
+
+    for (operation_e op = 0; op_count_e != op; op++)
+    {
+        if (0 == strcmp(operatorTokens[op], token))
+        {
+            if (operatorAttatchLeft[op] &&
+                2 == operatorOperandCount[op])
+            {
+                // <complete statement> + ...
+                if (NULL == prevExp ||
+                    true == expressionRequiresOperand(prevExp))
+                {
+                    printErrorArgs("\"%s\" requires preceding statement", token);
+                    return false;
+                }
+
+                free(token);
+                token = NULL;
+
+                *newExp = calloc(1, sizeof(**newExp));
+                (*newExp)->parent = prevExp->parent;
+                (*newExp)->type   = et_binary_e;
+
+                (*newExp)->contents.binary.operation = op;
+                (*newExp)->contents.binary.operand1  = (struct expression_t *) prevExp;
+
+                if (false == parseExpression(stackFrame,
+                                             (expression_t **)&(*newExp)->contents.binary.operand2,
+                                             *newExp))
+                {
+                    return false;
+                }
+
+                goto checkForEnd;
+            }
+        }
+    }
+
+    if (isIdentifier(token))
+    {
+
+        for (stackFrame_t *sf = stackFrame; NULL != sf; sf = sf->prevAccessableStackFrame)
+        {
+            if (NULL != (tmpVar = findVariable(&sf->variables, token)))
+            {
+                *newExp = calloc(1, sizeof(**newExp));
+                (*newExp)->parent = (struct expression_t*) prevExp;
+                (*newExp)->type   = et_variable_e;
+                (*newExp)->contents.variable = tmpVar;
+
+                goto checkForEnd;
+            }
+        }
+
+        // TODO function calls
+
+        printErrorArgs("undefined identifier \"%s\"", token);
+
+        free(token);
+
+        return false;
+    }
+
+    printErrorArgs("something's wrong with \"%s\"", token);
+
+    free(token);
+
+    return false;
+
+    checkForEnd:
+    token = peekNextTokenFromFile(inputFile);
+
+    if (0 == strcmp(";", token))
+    {
+        free(token);
+        return true;
+    }
+
+    free(token);
+
+    expression_t *tmpExpression = *newExp;
+    *newExp = NULL;
+    
+    return parseExpression(stackFrame, newExp, tmpExpression);
 }
 
 static bool createVariable(type_t *varType,
@@ -421,7 +745,7 @@ static bool getTypeAndIdent(type_t **typeOut,
 
         if (isKeyword(token))
         {
-            printError("unexpected keyword");
+            printErrorArgs("unexpected keyword \"%s\"", token);
             return false;
         }
 
@@ -513,6 +837,7 @@ static bool processStackFrame(stackFrame_t *stackFrame)
     variable_t      *tmpVar           = NULL;
     type_t          *tmpType          = NULL;
     voidContainer_t *tmpVoidContainer = NULL;
+    expression_t    *newExpression    = NULL;
 
     if (NULL == stackFrame)
     {
@@ -535,6 +860,11 @@ static bool processStackFrame(stackFrame_t *stackFrame)
         {
             printError("Expected \"}\"");
             return false;
+        }
+
+        if (0 == strcmp(";", token))
+        {
+            continue;
         }
 
         if (0 == strcmp("}", token))
@@ -641,7 +971,7 @@ static bool processStackFrame(stackFrame_t *stackFrame)
             if (NULL != (tmpVar = findVariable(&(stackFrame->variables), token)))
             {
                 tmpVar = NULL;
-                printError("Redefinition of variable");
+                printErrorArgs("redefinition of variable \"%s\"", token);
                 free(tmpType);
                 tmpType = NULL;
                 drainToNextSemicolon();
@@ -687,7 +1017,7 @@ static bool processStackFrame(stackFrame_t *stackFrame)
 
             if (0 != strcmp("=", token))
             {
-                printError("expected \";\" or \"=\"");
+                printErrorArgs("expected \";\" or \"=\", got \"%s\"", token);
                 drainToNextSemicolon();
                 rc = false;
                 continue;
@@ -699,8 +1029,31 @@ static bool processStackFrame(stackFrame_t *stackFrame)
             continue;
         }
 
-        printError("No clue what you're doing, but I haven't implemented it yet");
-        drainToNextSemicolon();
+        rewindTokenParse();
+
+        if (false == parseExpression(stackFrame, &newExpression, NULL))
+        {
+            drainToNextSemicolon();
+            continue;
+        }
+
+        if (NULL == newExpression)
+        {
+            INTERNAL_ERROR;
+            continue;
+        }
+
+        tmpVoidContainer = addVoidContainer(&stackFrame->codeBlock);
+
+        if (NULL == tmpVoidContainer)
+        {
+            INTERNAL_ERROR;
+            continue;
+        }
+
+        tmpVoidContainer->type = expression_e;
+        tmpVoidContainer->data = newExpression;
+        newExpression = NULL;
     }
 
     // Error path
@@ -1117,6 +1470,68 @@ static void DEBUG_printPadding(int padding)
     }
 }
 
+static void DEBUG_printExpression(expression_t *exp)
+{
+    if (NULL == exp)
+    {
+        INTERNAL_ERROR;
+        return;
+    }
+
+    switch (exp->type)
+    {
+        case et_variable_e:
+        {
+            if (NULL == exp->contents.variable)
+            {
+                printf("NULL VARIABLE");
+                return;
+            }
+            printf("%s", exp->contents.variable->identifier);
+            return;
+        }
+        case et_literal_e:
+        {
+            printf("%d", exp->contents.literal);
+            return;
+        }
+        case et_stringConstant_e:
+        {
+            printf("%s", exp->contents.stringLiteral);
+            return;
+        }
+        case et_unary_e:
+        {
+            printf("UNARY NOT IMPLEMENTED");
+            return;
+        }
+        case et_binary_e:
+        {
+            printf("<");
+            DEBUG_printExpression((expression_t*) exp->contents.binary.operand1);
+            printf(" %s ", operatorTokens[exp->contents.binary.operation]);
+            DEBUG_printExpression((expression_t*) exp->contents.binary.operand2);
+            printf(">");
+            return;
+        }
+        case et_trinary_e:
+        {
+            printf("TRINARY NOT IMPLEMENTED");
+            return;
+        }
+        case et_functionCall_e:
+        {
+            printf("FUNCTION CALL NOT IMPLEMENTED");
+            return;
+        }
+        default:
+        {
+            INTERNAL_ERROR;
+            return;
+        }
+    }
+}
+
 static void DEBUG_printStackFrame(int padding, stackFrame_t *sf)
 {
     if (padding < 0 ||
@@ -1161,6 +1576,13 @@ static void DEBUG_printStackFrame(int padding, stackFrame_t *sf)
                 {
                     printf("stack frame:\n");
                     DEBUG_printStackFrame(padding + 4, vc->data);
+                    break;
+                }
+                case expression_e:
+                {
+                    printf("expression:\n");
+                    DEBUG_printPadding(padding + 4);
+                    DEBUG_printExpression(vc->data);
                     break;
                 }
                 default:

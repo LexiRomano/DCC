@@ -9,19 +9,10 @@ void myFunc(int param1, unsigned char param2, uint8_t param3)
 {
     int a;
     int b;
+    int c;
+    int z;
 
-    {
-        int c;
-        {
-            int d;
-            {
-                int e;
-                {
-                    int f;
-                }
-            }
-        }
-    }
+    z * a + b - c + a;
 }
 
 uint8_t anotherOne;
