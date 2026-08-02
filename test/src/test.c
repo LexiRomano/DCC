@@ -16,10 +16,19 @@ void myFunc(int param1, unsigned char param2, uint8_t param3)
 
     myVar += ++something + b * c - myVar;
 
+    if (a == b)
     {
         char z;
 
         z - b * a + something;
+    }
+    else if (b == c)
+    {
+        a = b;
+    }
+    else
+    {
+        d = a;
     }
 }
 

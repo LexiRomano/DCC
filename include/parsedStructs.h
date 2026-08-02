@@ -37,7 +37,8 @@ typedef enum
     expression_e,
     variable_e,
     typedef_e,
-    type_e
+    type_e,
+    if_e
 } ident_e;
 
 typedef enum
@@ -311,5 +312,15 @@ typedef struct
     } contents;
 } expression_t;
 
+
+typedef struct if_t
+{
+    struct if_t *parent;
+
+    expression_t *condition;
+    stackFrame_t  consequence;
+
+    struct if_t *next;
+} if_t;
 
 #endif //__PARSED_STRUCTS_H__

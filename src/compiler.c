@@ -347,6 +347,48 @@ void drainToEndOfBlock(bool alreadyInBlock)
             braceDepth--;
             if (0 == braceDepth)
             {
+                free(token);
+                return;
+            }
+        }
+    }
+}
+
+void drainToEndOfParenthasis(bool alreadyInParenthesis)
+{
+    char *token      = NULL;
+    int   parenDepth = 0;
+
+    if (alreadyInParenthesis)
+    {
+        parenDepth++;
+    }
+
+    while (true)
+    {
+        if (NULL != token)
+        {
+            free(token);
+            token = NULL;
+        }
+
+        token = getNextTokenCheckingForLineChange();
+
+        if (NULL == token)
+        {
+            return;
+        }
+
+        if (0 == strcmp("(", token))
+        {
+            parenDepth++;
+        }
+        else if (0 == strcmp(")", token))
+        {
+            parenDepth--;
+            if (0 == parenDepth)
+            {
+                free(token);
                 return;
             }
         }
@@ -696,12 +738,22 @@ static bool parseExpression(stackFrame_t  *stackFrame,
         return false;
     }
 
+    saveForRewindTokenParse();
+
     token = getNextTokenCheckingForLineChange();
 
     if (NULL == token)
     {
         printError("expected expression");
         return false;
+    }
+
+    if (0 == strcmp(";", token) ||
+        0 == strcmp(")", token))
+    {
+        rewindTokenParse();
+        free(token);
+        return true;
     }
 
     // Special handling required for certain operators before the generic loop
@@ -848,7 +900,7 @@ static bool parseExpression(stackFrame_t  *stackFrame,
     if (NULL != *root &&
         false == expressionRequiresOperand(prevExp))
     {
-        printErrorArgs("expected operator or \";\" instead of %s", token);
+        printErrorArgs("expected operator or end of expression instead of %s", token);
         free(token);
         return false;
     }
@@ -915,7 +967,8 @@ static bool parseExpression(stackFrame_t  *stackFrame,
     checkForEnd:
     token = peekNextTokenFromFile(inputFile);
 
-    if (0 == strcmp(";", token))
+    if (0 == strcmp(";", token) ||
+        0 == strcmp(")", token))
     {
         free(token);
         return true;
@@ -1207,6 +1260,105 @@ static void doTypedef()
     typedefs.last       = newTypedef;
 }
 
+// Forward declaration
+static bool processStackFrame(stackFrame_t *stackFrame);
+
+// The "if" has already been parsed
+static bool parseIfStatement(stackFrame_t *stackFrame,
+                             if_t        **out)
+{
+    char         *token         = NULL;
+    if_t         *newIf         = NULL;
+    expression_t *newExpression = NULL;
+
+    if (NULL == stackFrame ||
+        NULL == out)
+    {
+        INTERNAL_ERROR;
+        return false;
+    }
+
+    token = getNextTokenCheckingForLineChange();
+
+    if (NULL == token ||
+        0    != strcmp("(", token))
+    {
+        printErrorArgs("expected \"(\" instead of \"%s\"", token);
+        if (NULL != token)
+        {
+            free(token);
+        }
+        return false;
+    }
+
+    free(token);
+    token = NULL;
+
+    if (false == parseExpression(stackFrame, &newExpression, NULL))
+    {
+        drainToEndOfParenthasis(true);
+        if (NULL != newExpression)
+        {
+            free(newExpression); //TODO make freeExpression when that exists
+            newExpression = NULL;
+        }
+        return false;
+    }
+
+    if (NULL == newExpression)
+    {
+        printError("expected statement");
+        return false;
+    }
+
+    token = getNextTokenCheckingForLineChange();
+
+    if (NULL == token ||
+        0    != strcmp(")", token))
+    {
+        printError("expected \")\"");
+        free(newExpression); //TODO make freeExpression when that exists
+        newExpression = NULL;
+        if (NULL != token)
+        {
+            free(token);
+        }
+        return false;
+    }
+
+    free(token);
+    token = getNextTokenCheckingForLineChange();
+
+    if (NULL == token ||
+        0    != strcmp("{", token))
+    {
+        printError("expected \"{\". Don't be gross >:[");
+        free(newExpression); //TODO make freeExpression when that exists
+        newExpression = NULL;
+        if (NULL != token)
+        {
+            free(token);
+        }
+        drainToNextSemicolon();
+        return false;
+    }
+
+    newIf = calloc(1, sizeof(*newIf));
+    newIf->condition = newExpression;
+    newExpression = NULL;
+    newIf->consequence.prevAccessableStackFrame = stackFrame;
+
+    if (processStackFrame(&newIf->consequence))
+    {
+        *out = newIf;
+        return true;
+    }
+
+    free(newIf->condition); //TODO make freeExpression when that exists
+    free(newIf);
+    return false;
+}
+
 // The opening "{" has already been parsed
 static bool processStackFrame(stackFrame_t *stackFrame)
 {
@@ -1218,6 +1370,7 @@ static bool processStackFrame(stackFrame_t *stackFrame)
     type_t          *tmpType          = NULL;
     voidContainer_t *tmpVoidContainer = NULL;
     expression_t    *newExpression    = NULL;
+    if_t            *newIf            = NULL;
 
     if (NULL == stackFrame)
     {
@@ -1261,15 +1414,84 @@ static bool processStackFrame(stackFrame_t *stackFrame)
 
         if (0 == strcmp("if", token))
         {
-            //TODO
-            printError("if statements not implemented");
-            break;
+            if (parseIfStatement(stackFrame, &newIf))
+            {
+                tmpVoidContainer = addVoidContainer(&stackFrame->codeBlock);
+
+                if (NULL == tmpVoidContainer)
+                {
+                    INTERNAL_ERROR;
+                    continue;
+                }
+
+                tmpVoidContainer->type = if_e;
+                tmpVoidContainer->data = newIf;
+                newIf = NULL;
+            }
+
+            continue;
         }
         if (0 == strcmp("else", token))
         {
-            //TODO
-            printError("else statements not implemented");
-            break;
+            // TODO get last thing added to code block to check for
+            tmpVoidContainer = stackFrame->codeBlock.lastItem;
+
+            if (if_e != tmpVoidContainer->type)
+            {
+                printError("expected preceding \"if\"");
+                continue;
+            }
+
+            free(token);
+            token = getNextTokenCheckingForLineChange();
+
+            if (NULL == token ||
+                (0 != strcmp("if", token) &&
+                 0 != strcmp("{",  token)))
+            {
+                printErrorArgs("expected \"if\" or \"{\", got \"%s\"", token);
+                if (0 == strcmp("(", token))
+                {
+                    drainToEndOfParenthasis(true);
+                }
+                continue;
+            }
+
+            if (0 == strcmp("if", token))
+            {
+                if (parseIfStatement(stackFrame, &newIf))
+                {
+                    newIf->parent = tmpVoidContainer->data;
+
+                    tmpVoidContainer = addVoidContainer(&stackFrame->codeBlock);
+
+                    tmpVoidContainer->type = if_e;
+                    tmpVoidContainer->data = newIf;
+                    newIf = NULL;
+                }
+
+                continue;
+            }
+
+
+            newIf = calloc(1, sizeof(*newIf));
+            newIf->consequence.prevAccessableStackFrame = stackFrame;
+
+            if (false == processStackFrame(&newIf->consequence))
+            {
+                free(newIf);
+                continue;
+            }
+
+            newIf->parent = tmpVoidContainer->data;
+
+            tmpVoidContainer = addVoidContainer(&stackFrame->codeBlock);
+
+            tmpVoidContainer->type = if_e;
+            tmpVoidContainer->data = newIf;
+            newIf = NULL;
+
+            continue;
         }
         if (0 == strcmp("for", token))
         {
@@ -1995,9 +2217,33 @@ static void DEBUG_printStackFrame(int padding, stackFrame_t *sf)
                 case expression_e:
                 {
                     printf("expression: ");
-                    //DEBUG_printPadding(padding + 4);
                     DEBUG_printExpression(vc->data);
                     printf("\n");
+                    break;
+                }
+                case if_e:
+                {
+                    if_t *i = vc->data;
+
+                    if (i->parent == NULL)
+                    {
+                        printf("if (");
+                        DEBUG_printExpression(i->condition);
+                        printf("):\n");
+                        DEBUG_printStackFrame(padding + 4, &i->consequence);
+                    }
+                    else
+                    {
+                        printf("else");
+                        if (i->condition != NULL)
+                        {
+                            printf(" if (");
+                            DEBUG_printExpression(i->condition);
+                            printf(")");
+                        }
+                        printf(":\n");
+                        DEBUG_printStackFrame(padding + 4, &i->consequence);
+                    }
                     break;
                 }
                 default:
