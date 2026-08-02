@@ -256,7 +256,7 @@ typedef enum
 {
     et_variable_e,
     et_literal_e,
-    et_stringConstant_e,
+    et_stringLiteral_e,
     et_unary_e,
     et_binary_e,
     et_trinary_e,
@@ -303,7 +303,7 @@ typedef struct
     union
     {
         variable_t       *variable;
-        int               literal;
+        unsigned int      literal;
         char             *stringLiteral;
         unaryOperator_t   unary;
         binaryOperator_t  binary;

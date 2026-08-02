@@ -49,6 +49,7 @@ bool stringWrappedWith(char *str, char c);
 char *getCurrentLine(FILE *file);
 bool isKeyword(char *str);
 bool isIdentifier(char *str);
+bool parseLiteral(char *literal, unsigned int *out);
 
 definition_t *addDefinition(definitionList_t *list);
 definition_t *getDefinition(definitionList_t *list, char *name);

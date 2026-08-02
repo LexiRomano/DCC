@@ -741,6 +741,196 @@ bool isIdentifier(char *str)
     return !isKeyword(str);
 }
 
+static bool parseBinary(char *str, unsigned int *out)
+{
+    unsigned int sum = 0;
+    unsigned int prevSum = 0;
+    char        *pointer = str;
+
+    if (NULL == str ||
+        NULL == out)
+    {
+        INTERNAL_ERROR;
+        return false;
+    }
+
+    while (*pointer != '\0')
+    {
+        prevSum = sum;
+        sum *= 0b10;
+
+        if (sum < prevSum)
+        {
+            return false;
+        }
+
+        switch (*pointer)
+        {
+            case '1':
+                sum++;
+            case '0':
+                break;
+            default:
+                return false;
+        }
+
+        pointer++;
+    }
+
+    *out = sum;
+
+    return true;
+}
+
+static bool parseDecimal(char *str, unsigned int *out)
+{
+    unsigned int sum     = 0;
+    unsigned int prevSum = 0;
+    char        *pointer = str;
+
+    while (*pointer != '\0')
+    {
+        prevSum = sum;
+        sum *= 10;
+        if (sum < prevSum)
+        {
+            return false;
+        }
+
+        switch (*pointer)
+        {
+            case '9':
+                sum++;
+            case '8':
+                sum++;
+            case '7':
+                sum++;
+            case '6':
+                sum++;
+            case '5':
+                sum++;
+            case '4':
+                sum++;
+            case '3':
+                sum++;
+            case '2':
+                sum++;
+            case '1':
+                sum++;
+            case '0':
+                break;
+            default:
+                return false;
+        }
+
+        pointer++;
+    }
+
+    *out = (int) sum;
+
+    return true;
+}
+
+static bool parseHexadecimal(char *str, unsigned int *out)
+{
+    unsigned int sum     = 0;
+    unsigned int prevSum = 0;
+    char        *pointer = str;
+
+    while (*pointer != '\0')
+    {
+        prevSum = sum;
+        sum *= 0x10;
+        if (sum < prevSum)
+        {
+            return false;
+        }
+
+
+        switch (*pointer)
+        {
+            case 'F':
+            case 'f':
+                sum++;
+            case 'E':
+            case 'e':
+                sum++;
+            case 'D':
+            case 'd':
+                sum++;
+            case 'C':
+            case 'c':
+                sum++;
+            case 'B':
+            case 'b':
+                sum++;
+            case 'A':
+            case 'a':
+                sum++;
+            case '9':
+                sum++;
+            case '8':
+                sum++;
+            case '7':
+                sum++;
+            case '6':
+                sum++;
+            case '5':
+                sum++;
+            case '4':
+                sum++;
+            case '3':
+                sum++;
+            case '2':
+                sum++;
+            case '1':
+                sum++;
+            case '0':
+                break;
+            default:
+                return false;
+        }
+
+        pointer++;
+    }
+
+    if (sum > 0xFFFFFFFF)
+    {
+        return false;
+    }
+
+    *out = (int) sum;
+
+    return true;
+}
+
+bool parseLiteral(char *literal, unsigned int *out)
+{
+    if (NULL == literal ||
+        NULL == out)
+    {
+        return false;
+    }
+
+    if (strlen(literal) >= 3)
+    {
+        // Has a prefix
+        if (0 == strncmp(literal, "0b", 2))
+        {
+            // Binary
+            return parseBinary(&(literal[2]), out);
+
+        }
+        else if (0 == strncmp(literal, "0x", 2))
+        {
+            // Hexadecimal
+            return parseHexadecimal(&(literal[2]), out);
+        }
+    }
+
+    return parseDecimal(literal, out);
+}
+
 void freeFunctionContents(function_t *func)
 {
     if (NULL == func)

@@ -101,7 +101,7 @@ static char *operatorTokens[] =
     "*",  // op_dereference_e
     "~",  // op_bitwiseNot_e
     "!",  // op_logicalNot_e
-    "",   // op_negative_e
+    "-",   // op_negative_e
     "",   // op_cast_e
     "*",   // op_multiplication_e
     "/",  // op_division_e
@@ -533,6 +533,12 @@ static bool getOperation(expression_t *exp,
             *out = op_variable_e;
             break;
         }
+        case et_literal_e:
+        case et_stringLiteral_e:
+        {
+            *out = op_literal_e;
+            break;
+        }
         default:
         {
             return false;
@@ -679,7 +685,7 @@ static bool bubbleUpExpression(expression_t **root,
 
     if (false == getOperation(new, &newOp))
     {
-        printf("A\n");
+        INTERNAL_ERROR;
         return false;
     }
 
@@ -687,7 +693,7 @@ static bool bubbleUpExpression(expression_t **root,
     {
         if (false == getOperation(e, &eOp))
         {
-            printf("B\n");
+            INTERNAL_ERROR;
             return false;
         }
 
@@ -699,7 +705,7 @@ static bool bubbleUpExpression(expression_t **root,
         if (false == getDesiredSwapPoint(e, &relocate) ||
             false == getEmptyExpression(new, &insert))
         {
-            printf("C\n");
+            INTERNAL_ERROR;
             return false;
         }
 
@@ -715,7 +721,7 @@ static bool bubbleUpExpression(expression_t **root,
 
     if (false == getEmptyExpression(new, &insert))
     {
-        printf("D\n");
+        INTERNAL_ERROR;
         return false;
     }
 
@@ -736,6 +742,7 @@ static bool parseExpression(stackFrame_t  *stackFrame,
     expression_t  *newExp  = NULL;
     expression_t  *newExp2 = NULL;
     expression_t **insert  = NULL;
+    unsigned int   literal = 0;
 
     if (NULL == root)
     {
@@ -921,9 +928,10 @@ static bool parseExpression(stackFrame_t  *stackFrame,
                 if (NULL  != prevExp &&
                     false == expressionRequiresOperand(prevExp))
                 {
-                    if (op == op_dereference_e)
+                    if (op == op_dereference_e ||
+                        op == op_negative_e)
                     {
-                        // Should instead be multiplication
+                        // Should instead be multiplication or subtraction
                         continue;
                     }
                     printErrorArgs("\"%s\" cannot precede a complete statement", token);
@@ -982,6 +990,8 @@ static bool parseExpression(stackFrame_t  *stackFrame,
             {
                 foundVariable:
                 free(token);
+
+                token = NULL;
                 newExp = calloc(1, sizeof(*newExp));
                 newExp->parent = (struct expression_t*) prevExp;
                 newExp->type   = et_variable_e;
@@ -1021,10 +1031,69 @@ static bool parseExpression(stackFrame_t  *stackFrame,
         return false;
     }
 
-    if (0 == strcmp(";", token))
+    if (parseLiteral(token, &literal))
     {
         free(token);
-        return true;
+        token = NULL;
+
+        newExp = calloc(1, sizeof(*newExp));
+        newExp->parent           = (struct expression_t*) prevExp;
+        newExp->type             = et_literal_e;
+        newExp->contents.literal = literal;
+
+        if (NULL == *root)
+        {
+            *root = newExp;
+        }
+        else if (false == getEmptyExpression(prevExp, &insert))
+        {
+            // Should have already checked for this
+            free(newExp);
+            INTERNAL_ERROR;
+            return false;
+        }
+        else
+        {
+            *insert = newExp;
+        }
+
+        goto checkForEnd;
+    }
+
+    if (stringWrappedWith(token, '"'))
+    {
+        // Take off last quote
+        token[strlen(token) - 1] = '\0';
+
+        // Take off the first quote and shift down
+        for (char *p = token; '\0' != *p; p++)
+        {
+            *p = p[1];
+        }
+
+        newExp = calloc(1, sizeof(*newExp));
+        newExp->parent                 = (struct expression_t*) prevExp;
+        newExp->type                   = et_stringLiteral_e;
+        newExp->contents.stringLiteral = token;
+        token                          = NULL;
+
+        if (NULL == *root)
+        {
+            *root = newExp;
+        }
+        else if (false == getEmptyExpression(prevExp, &insert))
+        {
+            // Should have already checked for this
+            free(newExp);
+            INTERNAL_ERROR;
+            return false;
+        }
+        else
+        {
+            *insert = newExp;
+        }
+
+        goto checkForEnd;
     }
 
     printErrorArgs("something's wrong with \"%s\"", token);
@@ -2168,12 +2237,12 @@ static void DEBUG_printExpression(expression_t *exp)
         }
         case et_literal_e:
         {
-            printf("%d", exp->contents.literal);
+            printf("%u", exp->contents.literal);
             return;
         }
-        case et_stringConstant_e:
+        case et_stringLiteral_e:
         {
-            printf("%s", exp->contents.stringLiteral);
+            printf("\"%s\"", exp->contents.stringLiteral);
             return;
         }
         case et_unary_e:
@@ -2192,6 +2261,7 @@ static void DEBUG_printExpression(expression_t *exp)
                 case op_preDecrement_e:
                 case op_dereference_e:
                 case op_reference_e:
+                case op_negative_e:
                 {
                     printf("<%s", operatorTokens[exp->contents.unary.operation]);
                     DEBUG_printExpression((expression_t*) exp->contents.unary.operand);
