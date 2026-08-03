@@ -414,12 +414,12 @@ do {                                       \
     error = true;                              \
 } while (false)
 
-#define printErrorArgs(msg, ...)                      \
-do {                                                   \
-    char *line = getCurrentLine(inputFile);             \
+#define printErrorArgs(msg, ...)                           \
+do {                                                        \
+    char *line = getCurrentLine(inputFile);                  \
     ERROR_ARGS(fileName, lineNumber, line, msg, __VA_ARGS__); \
-    free(line);                                           \
-    error = true;                                          \
+    free(line);                                                \
+    error = true;                                               \
 } while (false)
 
 // Caller to free result
@@ -697,7 +697,15 @@ static bool bubbleUpExpression(expression_t **root,
             return false;
         }
 
-        if (operatorPrecedence[eOp] <= operatorPrecedence[newOp])
+        if (false == operatorAttatchLeft[eOp] &&
+            2     == operatorOperandCount[eOp])
+        {
+            if (operatorPrecedence[eOp] < operatorPrecedence[newOp])
+            {
+                continue;
+            }
+        }
+        else if (operatorPrecedence[eOp] <= operatorPrecedence[newOp])
         {
             continue;
         }
@@ -1574,7 +1582,8 @@ static bool processStackFrame(stackFrame_t *stackFrame)
             // TODO get last thing added to code block to check for
             tmpVoidContainer = stackFrame->codeBlock.lastItem;
 
-            if (if_e != tmpVoidContainer->type)
+            if (if_e != tmpVoidContainer->type ||
+                NULL == ((if_t*)tmpVoidContainer->data)->condition)
             {
                 printError("expected preceding \"if\"");
                 continue;

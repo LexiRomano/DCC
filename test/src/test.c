@@ -16,6 +16,8 @@ void myFunc(int param1, unsigned char param2, uint8_t param3)
 
     a += "hello" * 0b1101;
 
+    a = b = c + 1;
+
     myVar += ++something + b * c - myVar;
 
     if (a == b)
