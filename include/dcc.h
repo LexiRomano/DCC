@@ -66,4 +66,6 @@ void freeVariableList(variableList_t *varList);
 voidContainer_t *addVoidContainer(voidList_t *vl);
 void freeVoidListContents(voidList_t *vl);
 
+void freeExpression(expression_t **exp);
+
 #endif //__DCC_H__

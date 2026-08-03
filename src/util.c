@@ -1113,3 +1113,55 @@ void freeVoidListContents(voidList_t *vl)
     vl->firstItem = NULL;
     vl->lastItem  = NULL;
 }
+
+void freeExpression(expression_t **exp)
+{
+    if (NULL == exp ||
+        NULL == *exp)
+    {
+        return;
+    }
+
+    switch ((*exp)->expressionType)
+    {
+        case et_variable_e:
+        {
+            break;
+        }
+        case et_literal_e:
+        {
+            break;
+        }
+        case et_stringLiteral_e:
+        {
+            free((*exp)->contents.stringLiteral);
+            break;
+        }
+        case et_unary_e:
+        {
+            freeExpression(&(*exp)->contents.unary.operand);
+            break;
+        }
+        case et_binary_e:
+        {
+            freeExpression(&(*exp)->contents.binary.operand1);
+            freeExpression(&(*exp)->contents.binary.operand2);
+            break;
+        }
+        case et_trinary_e:
+        {
+            freeExpression(&(*exp)->contents.trinary.operand1);
+            freeExpression(&(*exp)->contents.trinary.operand2);
+            freeExpression(&(*exp)->contents.trinary.operand3);
+            break;
+        }
+        case et_functionCall_e:
+        {
+            INTERNAL_ERROR;
+            break;
+        }
+    }
+
+    free(*exp);
+    *exp = NULL;
+}

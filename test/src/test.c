@@ -11,10 +11,13 @@ void myFunc(int param1, unsigned char param2, uint8_t param3)
     uint8_t            b;
     char               c;
     unsigned short int d;
+    char *myString;
+
+    myString = "Hello!";
 
     (b - a) * (-a == c) * d;
 
-    a += "hello" * 0b1101;
+    a += a * 0b1101;
 
     a = b = c + 1;
 

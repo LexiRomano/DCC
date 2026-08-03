@@ -236,6 +236,7 @@ typedef struct typedef_t
 {
     char         *identifier;
     typedefType_e typedefType;
+    bool          simplifiesToRawType;
     union
     {
         type_t   typeExtension;
@@ -295,10 +296,11 @@ typedef struct
     struct expression_t *lastParam;
 } functionCall_t;
 
-typedef struct
+typedef struct expression_t
 {
     struct expression_t *parent;
-    expressionType_e type;
+    expressionType_e     expressionType;
+    type_t               resultingType;
 
     union
     {

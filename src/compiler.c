@@ -471,6 +471,518 @@ static type_t *findType(char *str)
     return NULL;
 }
 
+static bool isTypeRaw(type_t *t)
+{
+    if (NULL == t ||
+        t->isVoid ||
+        t->pointerDepth > 0)
+    {
+        return false;
+    }
+
+    if (t->isRaw ||
+        t->type.typeDefinition->simplifiesToRawType)
+    {
+        return true;
+    }
+
+    return false;
+}
+
+static bool isTypePointer(type_t *t)
+{
+    if (NULL == t ||
+        t->pointerDepth == 0)
+    {
+        return false;
+    }
+
+    return true;
+}
+
+static char *getTypeString(type_t *t)
+{
+    char buf[64] = {0};
+
+    if (NULL == t)
+    {
+        return NULL;
+    }
+
+    if (t->isVoid)
+    {
+        snprintf(buf, sizeof(buf), "void");
+    }
+    else if (t->isRaw)
+    {
+        switch (t->type.rawType)
+        {
+            case int_e:
+            {
+                snprintf(buf, sizeof(buf), "int");
+                break;
+            }
+            case uint_e:
+            {
+                snprintf(buf, sizeof(buf), "unsigned int");
+                break;
+            }
+            case hint_e:
+            {
+                snprintf(buf, sizeof(buf), "short int");
+                break;
+            }
+            case huint_e:
+            {
+                snprintf(buf, sizeof(buf), "short unsigned int");
+                break;
+            }
+            case char_e:
+            {
+                snprintf(buf, sizeof(buf), "char");
+                break;
+            }
+            case uchar_e:
+            {
+                snprintf(buf, sizeof(buf), "unsigned char");
+                break;
+            }
+        }
+    }
+    else
+    {
+        snprintf(buf, sizeof(buf), "%s", t->type.typeDefinition->identifier);
+    }
+
+    if (t->pointerDepth > 0)
+    {
+        for (int i = 0; i < t->pointerDepth; i++)
+        {
+            snprintf(&buf[strlen(buf)], sizeof(buf) - strlen(buf), "*");
+        }
+    }
+
+    return strcpy(calloc(strlen(buf) + 1, sizeof(char)), buf);
+}
+
+static bool isReferencable(expression_t *exp)
+{
+    expression_t *childExp = NULL;
+
+    if (NULL == exp)
+    {
+        return false;
+    }
+
+    childExp = exp;
+    while (true)
+    {
+        switch (childExp->expressionType)
+        {
+            case et_variable_e:
+            {
+                return true;
+            }
+            case et_unary_e:
+            {
+                switch (childExp->contents.unary.operation)
+                {
+                    case op_parenthesis_e:
+                    {
+                        childExp = childExp->contents.unary.operand;
+                        continue;
+                    }
+                    case op_dereference_e:
+                    {
+                        return true;
+                    }
+                    default:
+                    {
+                        return false;
+                    }
+                }
+            }
+            default:
+            {
+                return false;
+            }
+        }
+    }
+}
+
+static bool areTypesSimilar(type_t *t1, type_t *t2)
+{
+    if (NULL == t1 ||
+        NULL == t2)
+    {
+        INTERNAL_ERROR;
+        return false;
+    }
+
+    if (t1->isVoid       != t2->isVoid ||
+        t1->isRaw        != t2->isRaw  ||
+        t1->pointerDepth != t2->pointerDepth)
+    {
+        return false;
+    }
+
+    if (t1->isVoid)
+    {
+        return true;
+    }
+
+    if (t1->isRaw)
+    {
+        return true;
+    }
+
+    return t1->type.typeDefinition == t2->type.typeDefinition;
+}
+
+static bool evaluateType(expression_t *exp)
+{
+    type_t *resType    = NULL;
+    type_t *childType1 = NULL;
+    type_t *childType2 = NULL;
+    char   *typeStr1   = NULL;
+    char   *typeStr2   = NULL;
+    
+    if (NULL == exp)
+    {
+        return true;
+    }
+
+    resType = &exp->resultingType;
+
+
+    switch (exp->expressionType)
+    {
+        case et_variable_e:
+        {
+            memcpy(resType, &exp->contents.variable->type, sizeof(*resType));
+            return true;
+        }
+        case et_literal_e:
+        {
+            resType->isVoid       = false;
+            resType->isRaw        = true;
+            resType->type.rawType = int_e;
+            resType->pointerDepth = 0;
+            return true;
+        }
+        case et_stringLiteral_e:
+        {
+            resType->isVoid       = false;
+            resType->isRaw        = true;
+            resType->type.rawType = char_e;
+            resType->pointerDepth = 1;
+            return true;
+        }
+        case et_unary_e:
+        {
+            if (false == evaluateType(exp->contents.unary.operand))
+            {
+                return false;
+            }
+            childType1 = &(exp->contents.unary.operand->resultingType);
+
+            if (NULL == childType1)
+            {
+                INTERNAL_ERROR;
+                return false;
+            }
+
+            if (childType1->isVoid &&
+                childType1->pointerDepth == 0)
+            {
+                printError("cannot operate on void type");
+                return false;
+            }
+
+            switch (exp->contents.unary.operation)
+            {
+                case op_postIncrement_e:
+                case op_postDecrement_e:
+                case op_preIncrement_e:
+                case op_preDecrement_e:
+                {
+                    if (isTypeRaw    (childType1) ||
+                        isTypePointer(childType1))
+                    {
+                        memcpy(resType, childType1, sizeof(*resType));
+                        return true;
+                    }
+                    typeStr1 = getTypeString(childType1);
+                    printErrorArgs("cannot apply \"%s\" operator to '%s'",
+                                   operatorTokens[exp->contents.unary.operation], typeStr1);
+                    free(typeStr1);
+                    return false;
+                }
+                case op_bitwiseNot_e:
+                case op_negative_e:
+                {
+                    if (isTypeRaw(childType1))
+                    {
+                        memcpy(resType, childType1, sizeof(*resType));
+                        return true;
+                    }
+                    typeStr1 = getTypeString(childType1);
+                    printErrorArgs("cannot apply \"%s\" operator to '%s'",
+                                   operatorTokens[exp->contents.unary.operation], typeStr1);
+                    free(typeStr1);
+                    return false;
+                }
+                case op_reference_e:
+                {
+                    if (false == isReferencable(exp->contents.unary.operand))
+                    {
+                        typeStr1 = getTypeString(childType1);
+                        printErrorArgs("cannot dereference '%s'", typeStr1);
+                        free(typeStr1);
+                        return false;
+                    }
+                    memcpy(resType, childType1, sizeof(*resType));
+                    resType->pointerDepth++;
+                    return true;
+                }
+                case op_dereference_e:
+                {
+                    if (childType1->pointerDepth == 0)
+                    {
+                        printError("only pointers can be dereferenced");
+                        return false;
+                    }
+                    if (childType1->pointerDepth == 1 &&
+                        childType1->isVoid)
+                    {
+                        printError("cannot dereference NULL pointers");
+                        return false;
+                    }
+                    memcpy(resType, childType1, sizeof(*resType));
+                    resType->pointerDepth--;
+                    return true;
+                }
+                case op_parenthesis_e:
+                {
+                    memcpy(resType, childType1, sizeof(*resType));
+                    return true;
+                }
+                default:
+                {
+                    INTERNAL_ERROR;
+                    return false;
+                }
+            }
+        }
+        case et_binary_e:
+        {
+            if (false == evaluateType(exp->contents.binary.operand1) ||
+                false == evaluateType(exp->contents.binary.operand2))
+            {
+                return false;
+            }
+
+            childType1 = &(exp->contents.binary.operand1->resultingType);
+            childType2 = &(exp->contents.binary.operand2->resultingType);
+
+            if (NULL == childType1 ||
+                NULL == childType2)
+            {
+                INTERNAL_ERROR;
+                return false;
+            }
+
+            if ((childType1->isVoid &&
+                 childType1->pointerDepth == 0) ||
+                (childType2->isVoid &&
+                 childType2->pointerDepth == 0))
+            {
+                printError("cannot operate on void type");
+                return false;
+            }
+            switch (exp->contents.binary.operation)
+            {
+                case op_addition_e:
+                {
+                    if (isTypeRaw(childType1) && isTypeRaw(childType2))
+                    {
+                        resType->isVoid       = false;
+                        resType->isRaw        = true;
+                        resType->type.rawType = int_e;
+                        resType->pointerDepth = 0;
+                        return true;
+                    }
+                    if (isTypePointer(childType1) && isTypeRaw(childType2))
+                    {
+                        memcpy(resType, childType1, sizeof(*resType));
+                        return true;
+                    }
+                    if (isTypeRaw(childType1) && isTypePointer(childType2))
+                    {
+                        memcpy(resType, childType2, sizeof(*resType));
+                        return true;
+                    }
+                    break;
+                }
+                case op_subtraction_e:
+                {
+                    if (isTypeRaw(childType1) && isTypeRaw(childType2))
+                    {
+                        resType->isVoid       = false;
+                        resType->isRaw        = true;
+                        resType->type.rawType = int_e;
+                        resType->pointerDepth = 0;
+                        return true;
+                    }
+                    if (isTypePointer(childType1) && isTypeRaw(childType2))
+                    {
+                        memcpy(resType, childType1, sizeof(*resType));
+                        return true;
+                    }
+                    break;
+                }
+                case op_multiplication_e:
+                case op_division_e:
+                case op_bitshiftLeft_e:
+                case op_bitshiftRight_e:
+                case op_bitwiseAnd_e:
+                case op_bitwiseOr_e:
+                case op_bitwiseXor_e:
+                {
+                    if (isTypeRaw(childType1) && isTypeRaw(childType2))
+                    {
+                        resType->isVoid       = false;
+                        resType->isRaw        = true;
+                        resType->type.rawType = int_e;
+                        resType->pointerDepth = 0;
+                        return true;
+                    }
+                    break;
+                }
+                case op_equals_e:
+                case op_notEquals_e:
+                case op_lessThan_e:
+                case op_greaterEqual_e:
+                {
+                    if ((isTypeRaw(childType1) || isTypePointer(childType1)) &&
+                        (isTypeRaw(childType2) || isTypePointer(childType2)))
+                    {
+                        resType->isVoid       = false;
+                        resType->isRaw        = true;
+                        resType->type.rawType = int_e;
+                        resType->pointerDepth = 0;
+                        return true;
+                    }
+                    break;
+                }
+                case op_assignment_e:
+                {
+                    if (isTypeRaw(childType1) && isTypeRaw(childType2))
+                    {
+                        resType->isVoid       = false;
+                        resType->isRaw        = true;
+                        resType->type.rawType = int_e;
+                        resType->pointerDepth = 0;
+                        return true;
+                    }
+                    if (isTypePointer(childType1) && isTypePointer(childType2) &&
+                        areTypesSimilar(childType1, childType2))
+                    {
+                        memcpy(resType, childType1, sizeof(*resType));
+                        return true;
+                    }
+
+                    typeStr1 = getTypeString(childType1);
+                    typeStr2 = getTypeString(childType2);
+                    printErrorArgs("cannot assign '%s' to '%s'", typeStr1, typeStr2);
+                    free(typeStr1);
+                    free(typeStr2);
+                    return false;
+                }
+                case op_addAssignment_e:
+                case op_subtractAssignment_e:
+                {
+                    if (isTypeRaw(childType1) && isTypeRaw(childType2))
+                    {
+                        resType->isVoid       = false;
+                        resType->isRaw        = true;
+                        resType->type.rawType = int_e;
+                        resType->pointerDepth = 0;
+                        return true;
+                    }
+
+                    if (isTypeRaw(childType1) && isTypePointer(childType2))
+                    {
+                        memcpy(resType, childType2, sizeof(*resType));
+                        return true;
+                    }
+
+                    typeStr1 = getTypeString(childType1);
+                    typeStr2 = getTypeString(childType2);
+                    printErrorArgs("cannot perform %s on '%s' with '%s'", 
+                                   operatorTokens[exp->contents.binary.operation],
+                                   typeStr2, typeStr1);
+                    free(typeStr1);
+                    free(typeStr2);
+                    return false;
+                }
+                case op_multiplyAssignment_e:
+                case op_divideAssignment_e:
+                case op_modulusAssignment_e:
+                {
+                    if (isTypeRaw(childType1) && isTypeRaw(childType2))
+                    {
+                        resType->isVoid       = false;
+                        resType->isRaw        = true;
+                        resType->type.rawType = int_e;
+                        resType->pointerDepth = 0;
+                        return true;
+                    }
+
+                    typeStr1 = getTypeString(childType1);
+                    typeStr2 = getTypeString(childType2);
+                    printErrorArgs("cannot perform %s on '%s' with '%s'", 
+                                   operatorTokens[exp->contents.binary.operation],
+                                   typeStr2, typeStr1);
+                    free(typeStr1);
+                    free(typeStr2);
+                    return false;
+                }
+                default:
+                {
+                    printf("%s", operatorTokens[exp->contents.binary.operation]);
+                    INTERNAL_ERROR;
+                    return false;
+                }
+            }
+
+            typeStr1 = getTypeString(childType1);
+            typeStr2 = getTypeString(childType2);
+            printErrorArgs("invalid operands for %s (have '%s' and '%s')",
+                            operatorTokens[exp->contents.binary.operation],
+                            typeStr1, typeStr2);
+            free(typeStr1);
+            free(typeStr2);
+            return false;
+        }
+        case et_trinary_e:
+        {
+            printError("trinary type evaluation not supported");
+            return false;
+        }
+        case et_functionCall_e:
+        {
+            printError("function call type evaluation not supported");
+            return true;
+        }
+        default:
+        {
+            INTERNAL_ERROR;
+            return false;
+        }
+    }
+}
+
 static bool expressionRequiresOperand(expression_t *exp)
 {
     if (NULL == exp)
@@ -478,7 +990,7 @@ static bool expressionRequiresOperand(expression_t *exp)
         return false;
     }
 
-    switch (exp->type)
+    switch (exp->expressionType)
     {
         case et_unary_e:
         {
@@ -511,7 +1023,7 @@ static bool getOperation(expression_t *exp,
         return false;
     }
 
-    switch (exp->type)
+    switch (exp->expressionType)
     {
         case et_unary_e:
         {
@@ -557,28 +1069,28 @@ static bool getDesiredSwapPoint(expression_t   *in,
         return false;
     }
 
-    switch (in->type)
+    switch (in->expressionType)
     {
         case et_unary_e:
         {
-            *out = (expression_t**) &in->contents.unary.operand;
+            *out = &in->contents.unary.operand;
             break;
         }
         case et_binary_e:
         {
             if (false == operatorAttatchLeft[in->contents.binary.operation])
             {
-                *out = (expression_t**) &in->contents.binary.operand1;
+                *out = &in->contents.binary.operand1;
             }
             else
             {
-                *out = (expression_t**) &in->contents.binary.operand2;
+                *out = &in->contents.binary.operand2;
             }
             break;
         }
         case et_trinary_e:
         {
-            *out = (expression_t**) &in->contents.trinary.operand3;
+            *out = &in->contents.trinary.operand3;
             break;
         }
         default:
@@ -599,13 +1111,13 @@ static bool getEmptyExpression(expression_t   *in,
         return false;
     }
 
-    switch (in->type)
+    switch (in->expressionType)
     {
         case et_unary_e:
         {
             if (NULL == in->contents.unary.operand)
             {
-                *out = (expression_t**) &in->contents.unary.operand;
+                *out = &in->contents.unary.operand;
                 return true;
             }
             break;
@@ -616,12 +1128,12 @@ static bool getEmptyExpression(expression_t   *in,
             {
                 if (NULL == in->contents.binary.operand2)
                 {
-                    *out = (expression_t**) &in->contents.binary.operand2;
+                    *out = &in->contents.binary.operand2;
                     return true;
                 }
                 if (NULL == in->contents.binary.operand1)
                 {
-                    *out = (expression_t**) &in->contents.binary.operand1;
+                    *out = &in->contents.binary.operand1;
                     return true;
                 }
             }
@@ -629,12 +1141,12 @@ static bool getEmptyExpression(expression_t   *in,
             {
                 if (NULL == in->contents.binary.operand1)
                 {
-                    *out = (expression_t**) &in->contents.binary.operand1;
+                    *out = &in->contents.binary.operand1;
                     return true;
                 }
                 if (NULL == in->contents.binary.operand2)
                 {
-                    *out = (expression_t**) &in->contents.binary.operand2;
+                    *out = &in->contents.binary.operand2;
                     return true;
                 }
             }
@@ -644,15 +1156,15 @@ static bool getEmptyExpression(expression_t   *in,
         {
             if (NULL == in->contents.trinary.operand1)
             {
-                *out = (expression_t**) &in->contents.trinary.operand1;
+                *out = &in->contents.trinary.operand1;
             }
             if (NULL == in->contents.trinary.operand2)
             {
-                *out = (expression_t**) &in->contents.trinary.operand2;
+                *out = &in->contents.trinary.operand2;
             }
             if (NULL == in->contents.trinary.operand3)
             {
-                *out = (expression_t**) &in->contents.trinary.operand3;
+                *out = &in->contents.trinary.operand3;
             }
             break;
         }
@@ -689,7 +1201,7 @@ static bool bubbleUpExpression(expression_t **root,
         return false;
     }
 
-    for (expression_t *e = current; NULL != e; e = (expression_t*) e->parent)
+    for (expression_t *e = current; NULL != e; e = e->parent)
     {
         if (false == getOperation(e, &eOp))
         {
@@ -720,10 +1232,10 @@ static bool bubbleUpExpression(expression_t **root,
         *insert = *relocate;
         if (NULL != (*relocate))
         {
-            (*relocate)->parent = (struct expression_t*) new;
+            (*relocate)->parent = new;
         }
         *relocate = new;
-        new->parent = (struct expression_t*) e;
+        new->parent = e;
         return true;
     }
 
@@ -734,16 +1246,17 @@ static bool bubbleUpExpression(expression_t **root,
     }
 
     *insert = *root;
-    (*root)->parent = (struct expression_t*) new;
+    (*root)->parent = new;
     *root = new;
 
     return true;
 }
 
-// Caller must still free the root structure on failure
 static bool parseExpression(stackFrame_t  *stackFrame,
-                            expression_t **root,
-                            expression_t  *prevExp)
+                            expression_t **root);
+static bool parseExpressionInternal(stackFrame_t  *stackFrame,
+                                    expression_t **root,
+                                    expression_t  *prevExp)
 {
     char          *token   = NULL;
     variable_t    *tmpVar  = NULL;
@@ -791,13 +1304,9 @@ static bool parseExpression(stackFrame_t  *stackFrame,
             return false;
         }
 
-        if (false == parseExpression(stackFrame, &newExp2, NULL))
+        if (false == parseExpression(stackFrame, &newExp2))
         {
-            if (NULL != newExp2)
-            {
-                free(newExp2);
-                return false;
-            }
+            return false;
         }
 
         if (NULL == newExp2)
@@ -813,17 +1322,17 @@ static bool parseExpression(stackFrame_t  *stackFrame,
             0    != strcmp(")", token))
         {
             printErrorArgs("expected \")\", got \"%s\"", token);
-            free(newExp2); //TODO make recursive free
+            freeExpression(&newExp2);
             free(token);
             return false;
         }
 
         free(token);
 
-        newExp = calloc(1, sizeof(*newExp));
-        newExp->type = et_unary_e;
+        newExp                           = calloc(1, sizeof(*newExp));
+        newExp->expressionType           = et_unary_e;
         newExp->contents.unary.operation = op_parenthesis_e;
-        newExp->contents.unary.operand   = (struct expression_t*) newExp2;
+        newExp->contents.unary.operand   = newExp2;
 
         if (NULL == insert)
         {
@@ -832,8 +1341,8 @@ static bool parseExpression(stackFrame_t  *stackFrame,
         }
         else
         {
-            *insert = newExp;
-            newExp->parent = (struct expression_t*) prevExp;
+            *insert        = newExp;
+            newExp->parent = prevExp;
         }
 
         goto checkForEnd;
@@ -857,8 +1366,8 @@ static bool parseExpression(stackFrame_t  *stackFrame,
                     return false;
                 }
 
-                newExp = calloc(1, sizeof(*newExp));
-                newExp->type = et_binary_e;
+                newExp                            = calloc(1, sizeof(*newExp));
+                newExp->expressionType            = et_binary_e;
                 newExp->contents.binary.operation = op;
 
                 if (NULL == *root)
@@ -868,12 +1377,12 @@ static bool parseExpression(stackFrame_t  *stackFrame,
                 else if (false == bubbleUpExpression(root, prevExp, newExp))
                 {
                     // Never got inserted into the tree, need to free here
-                    free(newExp);
+                    freeExpression(&newExp);
                     free(token);
                     return false;
                 }
 
-                if (false == parseExpression(stackFrame, root, newExp))
+                if (false == parseExpressionInternal(stackFrame, root, newExp))
                 {
                     free(token);
                     return false;
@@ -914,14 +1423,14 @@ static bool parseExpression(stackFrame_t  *stackFrame,
                 free(token);
                 token = NULL;
 
-                newExp = calloc(1, sizeof(*newExp));
-                newExp->type = et_unary_e;
+                newExp                           = calloc(1, sizeof(*newExp));
+                newExp->expressionType           = et_unary_e;
                 newExp->contents.unary.operation = op;
 
                 if (false == bubbleUpExpression(root, prevExp, newExp))
                 {
                     // Never got inserted into the tree, need to free here
-                    free(newExp);
+                    freeExpression(&newExp);
                     return false;
                 }
 
@@ -947,8 +1456,8 @@ static bool parseExpression(stackFrame_t  *stackFrame,
                     return false;
                 }
 
-                newExp = calloc(1, sizeof(*newExp));
-                newExp->type = et_unary_e;
+                newExp                           = calloc(1, sizeof(*newExp));
+                newExp->expressionType           = et_unary_e;
                 newExp->contents.unary.operation = op;
 
                 if (NULL == *root)
@@ -958,12 +1467,12 @@ static bool parseExpression(stackFrame_t  *stackFrame,
                 else if (false == bubbleUpExpression(root, prevExp, newExp))
                 {
                     // Never got inserted into the tree, need to free here
-                    free(newExp);
+                    freeExpression(&newExp);
                     free(token);
                     return false;
                 }
 
-                if (false == parseExpression(stackFrame, root, newExp))
+                if (false == parseExpressionInternal(stackFrame, root, newExp))
                 {
                     free(token);
                     return false;
@@ -998,11 +1507,11 @@ static bool parseExpression(stackFrame_t  *stackFrame,
             {
                 foundVariable:
                 free(token);
-
                 token = NULL;
-                newExp = calloc(1, sizeof(*newExp));
-                newExp->parent = (struct expression_t*) prevExp;
-                newExp->type   = et_variable_e;
+
+                newExp                    = calloc(1, sizeof(*newExp));
+                newExp->parent            = prevExp;
+                newExp->expressionType    = et_variable_e;
                 newExp->contents.variable = tmpVar;
 
                 if (NULL == *root)
@@ -1012,7 +1521,7 @@ static bool parseExpression(stackFrame_t  *stackFrame,
                 else if (false == getEmptyExpression(prevExp, &insert))
                 {
                     // Should have already checked for this
-                    free(newExp);
+                    freeExpression(&newExp);
                     INTERNAL_ERROR;
                     return false;
                 }
@@ -1044,9 +1553,9 @@ static bool parseExpression(stackFrame_t  *stackFrame,
         free(token);
         token = NULL;
 
-        newExp = calloc(1, sizeof(*newExp));
-        newExp->parent           = (struct expression_t*) prevExp;
-        newExp->type             = et_literal_e;
+        newExp                   = calloc(1, sizeof(*newExp));
+        newExp->parent           = prevExp;
+        newExp->expressionType   = et_literal_e;
         newExp->contents.literal = literal;
 
         if (NULL == *root)
@@ -1056,7 +1565,7 @@ static bool parseExpression(stackFrame_t  *stackFrame,
         else if (false == getEmptyExpression(prevExp, &insert))
         {
             // Should have already checked for this
-            free(newExp);
+            freeExpression(&newExp);
             INTERNAL_ERROR;
             return false;
         }
@@ -1079,9 +1588,9 @@ static bool parseExpression(stackFrame_t  *stackFrame,
             *p = p[1];
         }
 
-        newExp = calloc(1, sizeof(*newExp));
-        newExp->parent                 = (struct expression_t*) prevExp;
-        newExp->type                   = et_stringLiteral_e;
+        newExp                         = calloc(1, sizeof(*newExp));
+        newExp->parent                 = prevExp;
+        newExp->expressionType         = et_stringLiteral_e;
         newExp->contents.stringLiteral = token;
         token                          = NULL;
 
@@ -1092,7 +1601,7 @@ static bool parseExpression(stackFrame_t  *stackFrame,
         else if (false == getEmptyExpression(prevExp, &insert))
         {
             // Should have already checked for this
-            free(newExp);
+            freeExpression(&newExp);
             INTERNAL_ERROR;
             return false;
         }
@@ -1121,8 +1630,28 @@ static bool parseExpression(stackFrame_t  *stackFrame,
     }
 
     free(token);
-    
-    return parseExpression(stackFrame, root, newExp);
+
+    return parseExpressionInternal(stackFrame, root, newExp);
+}
+
+static bool parseExpression(stackFrame_t  *stackFrame,
+                            expression_t **root)
+{
+    if (NULL ==  root ||
+        NULL != *root)
+    {
+        INTERNAL_ERROR;
+        return false;
+    }
+
+    if (false == parseExpressionInternal(stackFrame, root, NULL) ||
+        false == evaluateType(*root))
+    {
+        freeExpression(root);
+        return false;
+    }
+
+    return true;
 }
 
 static bool createVariable(type_t *varType,
@@ -1296,7 +1825,12 @@ static bool getTypeAndIdent(type_t **typeOut,
 
             continue;
         }
-
+        if (NULL != foundType &&
+            0    == strcmp("*", token))
+        {
+            foundType->pointerDepth++;
+            continue;
+        }
         if (isIdentifier(token))
         {
             if (NULL == foundType)
@@ -1393,6 +1927,7 @@ static void doTypedef()
 
     newTypedef->identifier = foundIdent;
     newTypedef->typedefType = typeExtension_e;
+    newTypedef->simplifiesToRawType = isTypeRaw(foundType);
     memcpy(&(newTypedef->content.typeExtension), foundType, sizeof(*foundType));
 
     if (NULL == typedefs.first)
@@ -1440,14 +1975,9 @@ static bool parseIfStatement(stackFrame_t *stackFrame,
     free(token);
     token = NULL;
 
-    if (false == parseExpression(stackFrame, &newExpression, NULL))
+    if (false == parseExpression(stackFrame, &newExpression))
     {
         drainToEndOfParenthasis(true);
-        if (NULL != newExpression)
-        {
-            free(newExpression); //TODO make freeExpression when that exists
-            newExpression = NULL;
-        }
         return false;
     }
 
@@ -1463,7 +1993,7 @@ static bool parseIfStatement(stackFrame_t *stackFrame,
         0    != strcmp(")", token))
     {
         printError("expected \")\"");
-        free(newExpression); //TODO make freeExpression when that exists
+        freeExpression(&newExpression);
         newExpression = NULL;
         if (NULL != token)
         {
@@ -1479,7 +2009,7 @@ static bool parseIfStatement(stackFrame_t *stackFrame,
         0    != strcmp("{", token))
     {
         printError("expected \"{\". Don't be gross >:[");
-        free(newExpression); //TODO make freeExpression when that exists
+        freeExpression(&newExpression);
         newExpression = NULL;
         if (NULL != token)
         {
@@ -1500,7 +2030,7 @@ static bool parseIfStatement(stackFrame_t *stackFrame,
         return true;
     }
 
-    free(newIf->condition); //TODO make freeExpression when that exists
+    freeExpression(&newIf->condition);
     free(newIf);
     return false;
 }
@@ -1579,7 +2109,6 @@ static bool processStackFrame(stackFrame_t *stackFrame)
         }
         if (0 == strcmp("else", token))
         {
-            // TODO get last thing added to code block to check for
             tmpVoidContainer = stackFrame->codeBlock.lastItem;
 
             if (if_e != tmpVoidContainer->type ||
@@ -1780,14 +2309,9 @@ static bool processStackFrame(stackFrame_t *stackFrame)
 
         rewindTokenParse();
 
-        if (false == parseExpression(stackFrame, &newExpression, NULL))
+        if (false == parseExpression(stackFrame, &newExpression))
         {
             drainToNextSemicolon();
-            if (NULL != newExpression)
-            {
-                free(newExpression); //TODO make freeExpression when that exists
-                newExpression = NULL;
-            }
             continue;
         }
 
@@ -2232,7 +2756,7 @@ static void DEBUG_printExpression(expression_t *exp)
         return;
     }
 
-    switch (exp->type)
+    switch (exp->expressionType)
     {
         case et_variable_e:
         {
@@ -2262,7 +2786,7 @@ static void DEBUG_printExpression(expression_t *exp)
                 case op_postDecrement_e:
                 {
                     printf("<");
-                    DEBUG_printExpression((expression_t*) exp->contents.unary.operand);
+                    DEBUG_printExpression(exp->contents.unary.operand);
                     printf("%s>", operatorTokens[exp->contents.unary.operation]);
                     break;
                 }
@@ -2273,13 +2797,13 @@ static void DEBUG_printExpression(expression_t *exp)
                 case op_negative_e:
                 {
                     printf("<%s", operatorTokens[exp->contents.unary.operation]);
-                    DEBUG_printExpression((expression_t*) exp->contents.unary.operand);
+                    DEBUG_printExpression(exp->contents.unary.operand);
                     printf(">");
                     break;
                 }
                 case op_parenthesis_e:
                 {
-                    DEBUG_printExpression((expression_t*) exp->contents.unary.operand);
+                    DEBUG_printExpression(exp->contents.unary.operand);
                     break;
                 }
                 default:
@@ -2293,13 +2817,13 @@ static void DEBUG_printExpression(expression_t *exp)
         case et_binary_e:
         {
             printf("<");
-            DEBUG_printExpression((expression_t*) exp->contents.binary.operand1);
+            DEBUG_printExpression(exp->contents.binary.operand1);
             printf(" %s ", operatorTokens[exp->contents.binary.operation]);
             if (false == operatorAttatchLeft[exp->contents.binary.operation])
             {
                 printf("to ");
             }
-            DEBUG_printExpression((expression_t*) exp->contents.binary.operand2);
+            DEBUG_printExpression(exp->contents.binary.operand2);
             printf(">");
             return;
         }
