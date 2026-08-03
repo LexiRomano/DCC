@@ -1045,6 +1045,7 @@ void freeVoidListContents(voidList_t *vl)
 {
     voidContainer_t *cur = NULL;
     voidContainer_t *nxt = NULL;
+    bool             freeData = false;
 
     if (NULL == vl)
     {
@@ -1059,6 +1060,7 @@ void freeVoidListContents(voidList_t *vl)
 
         if (NULL != cur->data)
         {
+            freeData = true;
             switch (cur->type)
             {
                 case codeBlock_e:
@@ -1078,7 +1080,8 @@ void freeVoidListContents(voidList_t *vl)
                 }
                 case expression_e:
                 {
-                    INTERNAL_ERROR;
+                    freeExpression((expression_t**) &cur->data);
+                    freeData = false;
                     break;
                 }
                 case variable_e:
@@ -1096,6 +1099,16 @@ void freeVoidListContents(voidList_t *vl)
                     // Nothing to free
                     break;
                 }
+                case if_e:
+                {
+                    if_t *i = (if_t*) cur->data;
+
+                    if (NULL != i->condition)
+                    {
+                        freeExpression(&i->condition);
+                    }
+                    break;
+                }
                 default:
                 {
                     INTERNAL_ERROR;
@@ -1103,7 +1116,10 @@ void freeVoidListContents(voidList_t *vl)
                 }
             }
 
-            free(cur->data);
+            if (freeData)
+            {
+                free(cur->data);
+            }
         }
 
         free(cur);

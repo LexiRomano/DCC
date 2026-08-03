@@ -620,7 +620,6 @@ static bool areTypesSimilar(type_t *t1, type_t *t2)
     }
 
     if (t1->isVoid       != t2->isVoid ||
-        t1->isRaw        != t2->isRaw  ||
         t1->pointerDepth != t2->pointerDepth)
     {
         return false;
@@ -631,7 +630,8 @@ static bool areTypesSimilar(type_t *t1, type_t *t2)
         return true;
     }
 
-    if (t1->isRaw)
+    if ((t1->isRaw || t1->type.typeDefinition->simplifiesToRawType) &&
+        (t2->isRaw || t2->type.typeDefinition->simplifiesToRawType))
     {
         return true;
     }
@@ -1613,6 +1613,59 @@ static bool parseExpressionInternal(stackFrame_t  *stackFrame,
         goto checkForEnd;
     }
 
+    if (stringWrappedWith(token, '\''))
+    {
+        // Take off last quote
+        token[strlen(token) - 1] = '\0';
+
+        // Take off the first quote and shift down
+        for (char *p = token; '\0' != *p; p++)
+        {
+            *p = p[1];
+        }
+
+        if (1 == strlen(token))
+        {
+            literal = token[0];
+        }
+        else if (2 == strlen(token) && '\\' == token[0])
+        {
+            //escape sequence, not yet implemented
+            INTERNAL_ERROR;
+            free(token);
+            return false;
+        }
+        else
+        {
+            printErrorArgs("invalid char literal '%s'", token);
+            free(token);
+            return false;
+        }
+
+        newExp                   = calloc(1, sizeof(*newExp));
+        newExp->parent           = prevExp;
+        newExp->expressionType   = et_literal_e;
+        newExp->contents.literal = literal;
+
+        if (NULL == *root)
+        {
+            *root = newExp;
+        }
+        else if (false == getEmptyExpression(prevExp, &insert))
+        {
+            // Should have already checked for this
+            freeExpression(&newExp);
+            INTERNAL_ERROR;
+            return false;
+        }
+        else
+        {
+            *insert = newExp;
+        }
+
+        goto checkForEnd;
+    }
+
     printErrorArgs("something's wrong with \"%s\"", token);
 
     free(token);
@@ -1654,12 +1707,17 @@ static bool parseExpression(stackFrame_t  *stackFrame,
     return true;
 }
 
-static bool createVariable(type_t *varType,
-                           char *identifier,
+// the ; or = has already been parsed
+static bool createVariable(type_t         *varType,
+                           char           *identifier,
                            variableList_t *targetVarList,
-                           bool parseValue)
+                           stackFrame_t   *stackFrame,
+                           bool            parseValue)
 {
-    variable_t *newVar = NULL;
+    variable_t *newVar   = NULL;
+    char       *token    = NULL;
+    char       *typeStr1 = NULL;
+    char       *typeStr2 = NULL;
 
     if (NULL == varType    ||
         NULL == identifier ||
@@ -1668,12 +1726,49 @@ static bool createVariable(type_t *varType,
         return false;
     }
 
+    newVar = calloc(1, sizeof(*newVar));
+
     if (parseValue)
     {
-        //TODO
+        if (false == parseExpression(NULL, &newVar->initializer))
+        {
+            free(newVar);
+            drainToNextSemicolon();
+            return false;
+        }
+
+        if (NULL == newVar->initializer)
+        {
+            printError("expected expression");
+            return false;
+        }
+
+        token = getNextTokenCheckingForLineChange();
+
+        if (NULL == token ||
+            0    != strcmp(";", token))
+        {
+            printErrorArgs("expected \";\", got \"%s\"", token);
+            free(token);
+            return false;
+        }
+        free(token);
+        token = NULL;
+
+        if (false == areTypesSimilar(&newVar->initializer->resultingType, varType))
+        {
+            typeStr1 = getTypeString(&newVar->initializer->resultingType);
+            typeStr2 = getTypeString(varType);
+            printErrorArgs("cannot initialize to '%s' (expected '%s')",
+                           typeStr1, typeStr2);
+            free(typeStr1);
+            free(typeStr2);
+            freeExpression(&newVar->initializer);
+            free(newVar);
+            return false;
+        }
     }
 
-    newVar = calloc(1, sizeof(*newVar));
 
     newVar->identifier = strcpy(calloc(strlen(identifier) + 1, sizeof(char)), identifier);
     memcpy(&(newVar->type), varType, sizeof(*varType));
@@ -2039,6 +2134,7 @@ static bool parseIfStatement(stackFrame_t *stackFrame,
 static bool processStackFrame(stackFrame_t *stackFrame)
 {
     char *token = NULL;
+    char *ident = NULL;
     bool  rc    = true;
 
     stackFrame_t    *tmpStackFrame    = NULL;
@@ -2240,70 +2336,54 @@ static bool processStackFrame(stackFrame_t *stackFrame)
                 tmpType = NULL;
             }
 
-            if (false == getTypeAndIdent(&tmpType, &token))
+            if (false == getTypeAndIdent(&tmpType, &ident))
             {
-                drainToNextSemicolon();
-                continue;
-            }
-
-            if (NULL != (tmpVar = findVariable(&(stackFrame->variables), token)))
-            {
-                tmpVar = NULL;
-                printErrorArgs("redefinition of variable \"%s\"", token);
-                free(tmpType);
-                tmpType = NULL;
                 drainToNextSemicolon();
                 rc = false;
                 continue;
             }
 
-            tmpVar = calloc(1, sizeof(*tmpVar));
-
-            tmpVar->identifier = token;
-            token              = NULL;
-
-            memcpy(&(tmpVar->type), tmpType, sizeof(*tmpType));
-            free(tmpType);
-            tmpType = NULL;
-
-            if (NULL == stackFrame->variables.first)
+            if (NULL != (tmpVar = findVariable(&(stackFrame->variables), ident)))
             {
-                stackFrame->variables.first = tmpVar;
-                stackFrame->variables.last  = tmpVar;
-            }
-            else
-            {
-                stackFrame->variables.last->next = tmpVar;
-                stackFrame->variables.last       = tmpVar;
+                tmpVar = NULL;
+                printErrorArgs("redefinition of variable \"%s\"", ident);
+                free(tmpType);
+                tmpType = NULL;
+                free(ident);
+                ident = NULL;
+                drainToNextSemicolon();
+                rc = false;
+                continue;
             }
 
             token = getNextTokenCheckingForLineChange();
 
-            if (NULL == token)
+            if (NULL == token ||
+                (0 != strcmp(";", token) &&
+                 0 != strcmp("=", token)))
             {
-                printError("expected \";\" or \"=\"");
+                printErrorArgs("expected \";\" or\"=\", got \"%s\"", token);
+                free(tmpType);
+                tmpType = NULL;
+                free(ident);
+                ident = NULL;
                 drainToNextSemicolon();
                 rc = false;
                 continue;
             }
 
-            if (0 == strcmp(";", token))
+            if (false == createVariable(tmpType,
+                                        ident,
+                                        &stackFrame->variables,
+                                        stackFrame,
+                                        0 == strcmp("=", token)))
             {
-                tmpVar = NULL;
-                continue;
-            }
-
-            if (0 != strcmp("=", token))
-            {
-                printErrorArgs("expected \";\" or \"=\", got \"%s\"", token);
-                drainToNextSemicolon();
                 rc = false;
-                continue;
             }
-
-            printError("simultaneous declaration and assignment not supported");
-            drainToNextSemicolon();
-            rc = false;
+            free(tmpType);
+            tmpType = NULL;
+            free(ident);
+            ident = NULL;
             continue;
         }
 
@@ -2545,13 +2625,14 @@ static bool intake()
                 if (0 == strcmp("=", token))
                 {
                     // variable declaration + assignment
+                    createVariable(foundType, ident, &globalVariables, NULL, true);
                     break;
                 }
                 if (0 == strcmp(";", token))
                 {
                     // variable declaration
 
-                    createVariable(foundType, ident, &globalVariables, false);
+                    createVariable(foundType, ident, &globalVariables, NULL, false);
 
                     break;
                 }
@@ -2631,7 +2712,7 @@ static bool intake()
                 continue;
             }
 
-            printError("idk what you did, but this is wrong");
+            printErrorArgs("idk what you did, but this is wrong \"%s\"", token);
             drainToNextSemicolon();
         }
 
@@ -2869,6 +2950,14 @@ static void DEBUG_printStackFrame(int padding, stackFrame_t *sf)
             printf ("%s is of type ", v->identifier);
             DEBUG_printType(&v->type);
             printf("\n");
+
+            if (NULL != v->initializer)
+            {
+                DEBUG_printPadding(padding + 4);
+                printf("initializer: ");
+                DEBUG_printExpression(v->initializer);
+                printf("\n");
+            }
         }
     }
     DEBUG_printPadding(padding);
@@ -2987,6 +3076,13 @@ static void printDebug()
             printf ("  %s is of type ", v->identifier);
             DEBUG_printType(&v->type);
             printf("\n");
+
+            if (NULL != v->initializer)
+            {
+                printf("    initializer: ");
+                DEBUG_printExpression(v->initializer);
+                printf("\n");
+            }
         }
     }
 

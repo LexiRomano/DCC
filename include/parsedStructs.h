@@ -130,7 +130,10 @@ typedef enum
     op_count_e, // sentinel
 } operation_e;
 
-struct typedef_t; // forawrd declaration
+// forawrd declaration
+struct typedef_t;
+struct expression_t;
+
 typedef struct type_t
 {
     bool isVoid;
@@ -167,6 +170,7 @@ typedef struct variable_t
 {
     char   *identifier;
     type_t  type;
+    struct expression_t *initializer;
 
     struct variable_t *next;
 } variable_t;
@@ -263,9 +267,6 @@ typedef enum
     et_trinary_e,
     et_functionCall_e,
 } expressionType_e;
-
-// Forward declaration
-struct expression_t;
 
 typedef struct
 {

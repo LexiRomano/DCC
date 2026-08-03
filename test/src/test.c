@@ -1,19 +1,17 @@
 #include "test.h"
 
-uint8_t something;
+uint8_t something = 1;
 unsigned short int myVar;
 
 short unsigned int emptyFunc();
 
 void myFunc(int param1, unsigned char param2, uint8_t param3)
 {
-    int                a;
-    uint8_t            b;
-    char               c;
-    unsigned short int d;
-    char *myString;
-
-    myString = "Hello!";
+    int                a        = 1;
+    uint8_t            b        = 2;
+    char               c        = 'h';
+    unsigned short int d        = 100;
+    char              *myString = "Hello!";
 
     (b - a) * (-a == c) * d;
 
