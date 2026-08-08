@@ -19,6 +19,10 @@ void myFunc(int param1, unsigned char param2, uint8_t param3)
 
     a = b = c + 1;
 
+    {
+        int p;
+    }
+
     
     if (a == b)
     {

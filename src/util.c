@@ -1117,7 +1117,9 @@ void freeVoidListContents(voidList_t *vl)
                 }
                 case stackFrame_e:
                 {
-                    INTERNAL_ERROR;
+                    stackFrame_t *sf = cur->data;
+                    freeVariableListContents(&sf->variables);
+                    freeVoidListContents(&sf->codeBlock);
                     break;
                 }
                 case expression_e:

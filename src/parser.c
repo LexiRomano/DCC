@@ -2169,6 +2169,7 @@ static bool processStackFrame(stackFrame_t *stackFrame)
     type_t          *tmpType          = NULL;
     voidContainer_t *tmpVoidContainer = NULL;
     expression_t    *newExpression    = NULL;
+    if_t            *prevIf           = NULL;
     if_t            *newIf            = NULL;
 
     if (NULL == stackFrame)
@@ -2246,6 +2247,13 @@ static bool processStackFrame(stackFrame_t *stackFrame)
                 continue;
             }
 
+            prevIf = tmpVoidContainer->data;
+
+            while (prevIf->next != NULL)
+            {
+                prevIf = prevIf->next;
+            }
+
             free(token);
             token = getNextTokenCheckingForLineChange();
 
@@ -2270,13 +2278,9 @@ static bool processStackFrame(stackFrame_t *stackFrame)
                         stackFrame->maxStackSize = newIf->consequence.maxStackSize + stackFrame->varSize;
                     }
 
-                    newIf->parent = tmpVoidContainer->data;
-
-                    tmpVoidContainer = addVoidContainer(&stackFrame->codeBlock);
-
-                    tmpVoidContainer->type = if_e;
-                    tmpVoidContainer->data = newIf;
-                    newIf = NULL;
+                    newIf->parent       = prevIf;
+                    newIf->parent->next = newIf;
+                    newIf               = NULL;
                 }
 
                 continue;
@@ -2297,14 +2301,9 @@ static bool processStackFrame(stackFrame_t *stackFrame)
                 stackFrame->maxStackSize = newIf->consequence.maxStackSize + stackFrame->varSize;
             }
 
-            newIf->parent = tmpVoidContainer->data;
-
-            tmpVoidContainer = addVoidContainer(&stackFrame->codeBlock);
-
-            tmpVoidContainer->type = if_e;
-            tmpVoidContainer->data = newIf;
-            newIf = NULL;
-
+            newIf->parent       = prevIf;
+            newIf->parent->next = newIf;
+            newIf               = NULL;
             continue;
         }
         if (0 == strcmp("for", token))
@@ -3200,22 +3199,24 @@ static void DEBUG_printStackFrame(int padding, stackFrame_t *sf)
                 {
                     if_t *i = vc->data;
 
-                    if (i->parent == NULL)
+                    printf("if (");
+                    DEBUG_printExpression(i->condition);
+                    printf("):\n");
+                    DEBUG_printStackFrame(padding + 4, &i->consequence);
+
+                    while (NULL != i->next)
                     {
-                        printf("if (");
-                        DEBUG_printExpression(i->condition);
-                        printf("):\n");
-                        DEBUG_printStackFrame(padding + 4, &i->consequence);
-                    }
-                    else
-                    {
+                        i = i->next;
+                        DEBUG_printPadding(padding + 2);
                         printf("else");
-                        if (i->condition != NULL)
+
+                        if (NULL != i->condition)
                         {
                             printf(" if (");
                             DEBUG_printExpression(i->condition);
                             printf(")");
                         }
+
                         printf(":\n");
                         DEBUG_printStackFrame(padding + 4, &i->consequence);
                     }

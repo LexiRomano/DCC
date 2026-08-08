@@ -26,6 +26,135 @@ static bool outputGlobalVariables()
     return true;
 }
 
+static bool outputExpression(expression_t *exp)
+{
+    // TODO
+    fprintf(outputFile, "    //TODO: expressions\n");
+    return true;
+}
+
+// Forward declaration
+static bool outputStackFrame(stackFrame_t *sf);
+
+static bool outputIf(if_t *ifData)
+{
+    unsigned int endId   = 0;
+    unsigned int skipId  = 0;
+    bool         started = false;
+
+    if (NULL == ifData)
+    {
+        INTERNAL_ERROR;
+        return false;
+    }
+
+    endId = ftell(outputFile);
+
+    while (ifData != NULL)
+    {
+        if (started)
+        {
+            fprintf(outputFile, "    :__skipIf_%u__\n", skipId);
+        }
+        started = true;
+
+        if (NULL != ifData->condition)
+        {
+            if (NULL != ifData->next)
+            {
+                skipId = ftell(outputFile);
+            }
+
+            outputExpression(ifData->condition);
+            fprintf(outputFile, "    COMP          G0 0\n");
+            fprintf(outputFile, "    BREQ          ");
+            if (NULL == ifData->next)
+            {
+                fprintf(outputFile, "__doneIf_%u__\n", endId);
+            }
+            else
+            {
+                fprintf(outputFile, "__skipIf_%u__\n", skipId);
+            }
+        }
+
+        outputStackFrame(&ifData->consequence);
+
+        if (NULL != ifData->next)
+        {
+            fprintf(outputFile, "    BRAL          __doneIf_%u__\n", endId);
+        }
+
+        ifData = ifData->next;
+    }
+
+    fprintf(outputFile, "    :__doneIf_%u__\n", endId);
+    return true;
+}
+
+static bool outputStackFrame(stackFrame_t *sf)
+{
+    if (NULL == sf)
+    {
+        INTERNAL_ERROR;
+        return false;
+    }
+
+    // Align SP
+    if (sf->varSize > 0)
+    {
+        fprintf(outputFile, "    ADD           SP SP %u\n", sf->varSize);
+    }
+
+    for (voidContainer_t *vc = sf->codeBlock.firstItem; vc != NULL; vc = vc->nextVoidContainer)
+    {
+        switch (vc->type)
+        {
+            case stackFrame_e:
+            {
+                if (false == outputStackFrame(vc->data))
+                {
+                    return false;
+                }
+
+                break;
+            }
+            case expression_e:
+            {
+                if (false == outputExpression(vc->data))
+                {
+                    return false;
+                }
+                break;
+            }
+            case if_e:
+            {
+                if (false == outputIf(vc->data))
+                {
+                    return false;
+                }
+            }
+            default:
+            {
+                continue;
+            }
+        }
+    }
+
+    // Restore SP
+    if (sf->varSize > 0 && NULL != sf->prevAccessableStackFrame)
+    {
+        // If the previous stack frame is NULL, we're in the first frame
+        // of the function. In that case, the return routine will
+        // deal with the SP. Also if this is a non-void function, this
+        // should be inaccessable due to a return being required before
+        // hitting the end of the root stack frame.
+        fprintf(outputFile, "    SUB           SP SP %u\n", sf->varSize);
+    }
+
+    return true;
+}
+
 static bool outputFunctions()
 {
     for (function_t *f = pd->functions.first; NULL != f; f = f->next)
@@ -49,10 +178,9 @@ static bool outputFunctions()
         fprintf(outputFile, "    COMP          G0 0xFFC0\n");
         fprintf(outputFile, "    BRHS          __STACK_OVERFLOW__\n");
 
-        // Align SP
-        if (f->definition.varSize > 0)
+        if (false == outputStackFrame(&f->definition))
         {
-            fprintf(outputFile, "    ADD           SP SP %u\n", f->definition.varSize);
+            return false;
         }
 
         // Return routine
@@ -102,6 +230,11 @@ bool output(parsedData_t *parsedData, char *dsbFileName)
     free(parsedData);
 
     fclose(outputFile);
+
+    if (false == rc)
+    {
+        remove(dsbFileName);
+    }
 
     return rc;
 }
