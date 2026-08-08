@@ -169,9 +169,10 @@ typedef struct
 
 typedef struct variable_t
 {
-    char   *identifier;
-    type_t  type;
+    char                *identifier;
+    type_t               type;
     struct expression_t *initializer;
+    int                  offsetInFunc;
 
     struct variable_t *next;
 } variable_t;
@@ -191,6 +192,7 @@ typedef struct stackFrame_t
     variableList_t       variables;
     unsigned int         varSize;
     unsigned int         maxStackSize;
+    unsigned int         offsetInFunc;
 } stackFrame_t;
 
 typedef struct function_t

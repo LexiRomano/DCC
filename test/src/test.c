@@ -19,23 +19,28 @@ void myFunc(int param1, unsigned char param2, uint8_t param3)
 
     a = b = c + 1;
 
-    myVar += ++something + b * c - myVar;
-
+    
     if (a == b)
     {
         char z;
-
+        
         z - b * a + something;
     }
     else if (b == c)
     {
         int q;
         q = b;
+        {
+            int z;
+            a = z;
+        }
     }
     else
     {
         d = a;
     }
+
+    myVar += ++something + b * c - myVar;
 }
 
 uint8_t anotherOne;

@@ -2430,6 +2430,59 @@ static bool processStackFrame(stackFrame_t *stackFrame)
             {
                 stackFrame->varSize      += tmpType->size;
                 stackFrame->maxStackSize += tmpType->size;
+
+                if (NULL != stackFrame->variables.last->initializer)
+                {
+                    tmpVoidContainer = addVoidContainer(&stackFrame->codeBlock);
+
+                    if (NULL == tmpVoidContainer)
+                    {
+                        allocErrorVar:
+                        ALLOC_ERROR;
+                        if (NULL != tmpVoidContainer)
+                        {
+                            free(tmpVoidContainer);
+                        }
+                        free(tmpType);
+                        free(ident);
+                        rc = false;
+                        break;
+                    }
+
+                    newExpression = calloc(1, sizeof(*newExpression));
+
+                    if (NULL == newExpression)
+                    {
+                        goto allocErrorVar;
+                    }
+
+                    newExpression->expressionType            = et_binary_e;
+                    newExpression->contents.binary.operation = op_assignment_e;
+                    memcpy(&newExpression->resultingType,
+                           &stackFrame->variables.last->type,
+                           sizeof(type_t));
+
+                    newExpression->contents.binary.operand2  = calloc(1, sizeof(expression_t));
+                    
+                    if (NULL == newExpression->contents.binary.operand2)
+                    {
+                        free(newExpression);
+                        goto allocErrorVar;
+                    }
+
+                    newExpression->contents.binary.operand2->expressionType    = et_variable_e;
+                    newExpression->contents.binary.operand2->contents.variable = stackFrame->variables.last;
+                    memcpy(&newExpression->contents.binary.operand2->resultingType,
+                           &stackFrame->variables.last->type,
+                           sizeof(type_t));
+                    
+                    newExpression->contents.binary.operand1 = stackFrame->variables.last->initializer;
+                    stackFrame->variables.last->initializer = NULL;
+
+                    tmpVoidContainer->type = expression_e;
+                    tmpVoidContainer->data = newExpression;
+                    newExpression          = NULL;
+                }
             }
             free(tmpType);
             tmpType = NULL;
@@ -2503,6 +2556,59 @@ static bool addParamsToStackFrame(function_t *func)
 
         t = t->next;
         n = n->next;
+    }
+
+    return true;
+}
+
+static bool calculateOffsets(stackFrame_t *sf)
+{
+    unsigned int varOffset = 0;
+
+    if (NULL == sf)
+    {
+        INTERNAL_ERROR;
+        return false;
+    }
+
+    if (NULL == sf->prevAccessableStackFrame)
+    {
+        sf->offsetInFunc = 0;
+    }
+    else
+    {
+        sf->offsetInFunc = sf->prevAccessableStackFrame->offsetInFunc +
+                           sf->prevAccessableStackFrame->varSize;
+    }
+
+    varOffset = sf->offsetInFunc;
+    for (variable_t *v = sf->variables.first; NULL != v; v = v->next)
+    {
+        v->offsetInFunc =  varOffset;
+        varOffset       += v->type.size;
+    }
+
+    for (voidContainer_t *v = sf->codeBlock.firstItem; NULL != v; v = v->nextVoidContainer)
+    {
+        switch(v->type)
+        {
+            case stackFrame_e:
+            {
+                calculateOffsets(v->data);
+                break;
+            }
+            case if_e:
+            {
+                if_t *i = v->data;
+
+                calculateOffsets(&i->consequence);
+                break;
+            }
+            default:
+            {
+                break;
+            }
+        }
     }
 
     return true;
@@ -2657,7 +2763,8 @@ static void processFunction(type_t *returnType,
         currentFunction = &newFunction;
         
         if (false == addParamsToStackFrame(&newFunction) ||
-            false == processStackFrame(&(newFunction.definition)))
+            false == processStackFrame(&(newFunction.definition)) ||
+            false == calculateOffsets(&newFunction.definition))
         {
             freeFunctionContents(&newFunction);
             currentFunction = NULL;
@@ -3035,6 +3142,9 @@ static void DEBUG_printStackFrame(int padding, stackFrame_t *sf)
     printf("max stack size: %uB\n", sf->maxStackSize);
 
     DEBUG_printPadding(padding);
+    printf("offset in function: %uB\n", sf->offsetInFunc);
+
+    DEBUG_printPadding(padding);
     printf("variables (%uB):\n", sf->varSize);
     if (NULL == sf->variables.first)
     {
@@ -3048,7 +3158,7 @@ static void DEBUG_printStackFrame(int padding, stackFrame_t *sf)
             DEBUG_printPadding(padding + 2);
             printf ("%s is of type ", v->identifier);
             DEBUG_printType(&v->type);
-            printf("\n");
+            printf(" (%uB offset)\n", v->offsetInFunc);
 
             if (NULL != v->initializer)
             {
