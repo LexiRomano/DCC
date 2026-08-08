@@ -433,8 +433,9 @@ static type_t *findType(char *str)
     {
         out = calloc(1, sizeof(*out));
 
-        out->isRaw = true;
+        out->isRaw        = true;
         out->type.rawType = int_e;
+        out->size         = 4;
 
         return out;
     }
@@ -443,8 +444,9 @@ static type_t *findType(char *str)
     {
         out = calloc(1, sizeof(*out));
 
-        out->isRaw = true;
+        out->isRaw        = true;
         out->type.rawType = char_e;
+        out->size         = 1;
 
         return out;
     }
@@ -463,8 +465,11 @@ static type_t *findType(char *str)
         if (0 == strcmp(str, t->identifier))
         {
             out = calloc(1, sizeof(*out));
-            out->isRaw = false;
+
+            out->isRaw               = false;
             out->type.typeDefinition = t;
+            out->size                = t->size;
+
 
             return out;
         }
@@ -1807,6 +1812,7 @@ static bool applyVarDescriptors(bool isShort, bool isUnsigned, type_t *type)
         }
 
         type->type.rawType = huint_e;
+        type->size         = 2;
         return true;
     }
 
@@ -1820,6 +1826,7 @@ static bool applyVarDescriptors(bool isShort, bool isUnsigned, type_t *type)
         }
 
         type->type.rawType = hint_e;
+        type->size         = 2;
 
         return true;
     }
@@ -1926,6 +1933,7 @@ static bool getTypeAndIdent(type_t **typeOut,
             0    == strcmp("*", token))
         {
             foundType->pointerDepth++;
+            foundType->size = 4;
             continue;
         }
         if (isIdentifier(token))
@@ -2026,6 +2034,7 @@ static void doTypedef()
     newTypedef->typedefType = typeExtension_e;
     newTypedef->simplifiesToRawType = isTypeRaw(foundType);
     memcpy(&(newTypedef->content.typeExtension), foundType, sizeof(*foundType));
+    newTypedef->size = foundType->size;
 
     if (NULL == typedefs->first)
     {
@@ -2821,6 +2830,8 @@ static void DEBUG_printType(type_t *t)
     {
         printf("*");
     }
+
+    printf(" (%dB)", t->size);
 }
 
 static void DEBUG_printPadding(int padding)

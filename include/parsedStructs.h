@@ -144,6 +144,7 @@ typedef struct type_t
         struct typedef_t *typeDefinition;
     } type;
     unsigned char pointerDepth;
+    unsigned int  size;
     struct type_t *next;
 } type_t;
 
@@ -247,6 +248,8 @@ typedef struct typedef_t
         struct_t *structDefinition;
         enum_t   *enumDefinition;
     } content;
+
+    unsigned int size;
 
     struct typedef_t *next;
 } typedef_t;
