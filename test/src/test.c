@@ -7,44 +7,11 @@ short unsigned int emptyFunc();
 
 void myFunc(int param1, unsigned char param2, uint8_t param3)
 {
-    int                a        = 1;
-    uint8_t            b        = 2;
-    char               c        = 'h';
-    unsigned short int d        = 100;
-    char              *myString = "Hello!";
+    int a = 1;
 
-    (b - a) * (-a == c) * d + param1;
+    a = param2;
 
-    a += a * 0b1101;
-
-    a = b = c + 1;
-
-    {
-        int p;
-    }
-
-    
-    if (a == b)
-    {
-        char z;
-        
-        z - b * a + something;
-    }
-    else if (b == c)
-    {
-        int q;
-        q = b;
-        {
-            int z;
-            a = z;
-        }
-    }
-    else
-    {
-        d = a;
-    }
-
-    myVar += ++something + b * c - myVar;
+    something = a;
 }
 
 uint8_t anotherOne;

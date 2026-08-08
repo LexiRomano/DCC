@@ -3,6 +3,8 @@
 static FILE         *outputFile = NULL;
 static parsedData_t *pd         = NULL;
 
+#define PUT(str) fprintf(outputFile, str);
+
 static bool outputGlobalVariables()
 {
     FILE *globalFile = NULL;
@@ -26,11 +28,183 @@ static bool outputGlobalVariables()
     return true;
 }
 
+static bool outputExpressionInternal(expression_t *exp, uint8_t baseReg, bool forAssignment)
+{
+    switch (exp->expressionType)
+    {
+        case et_variable_e:
+        {
+            variable_t *var = exp->contents.variable;
+            if (forAssignment)
+            {
+                // TODO optimize for direct assignment
+                if (-1 == var->offsetInFunc)
+                {
+                    // Global variable
+                    PUT(DSB_MOVE); fprintf(outputFile, "G%hhu %s\n", baseReg, var->identifier);
+                }
+                else
+                {
+                    // Somewhere in the function frame
+                    PUT(DSB_SUB); fprintf(outputFile, "G%hhu OB OA\n", baseReg);
+                    PUT(DSB_ADD); fprintf(outputFile, "G%hhu G%hhu %u\n",
+                                          baseReg, baseReg, var->offsetInFunc);
+                }
+            }
+            else
+            {
+                if (-1 == var->offsetInFunc)
+                {
+                    // global variable
+                    switch (var->type.size)
+                    {
+                        case 1:
+                        {
+                            PUT(DSB_LOAD_C_OA);
+                            break;
+                        }
+                        case 2:
+                        {
+                            PUT(DSB_LOAD_H_OA);
+                            break;
+                        }
+                        case 4:
+                        {
+                            PUT(DSB_LOAD_OA);
+                            break;
+                        }
+                        default:
+                        {
+                            INTERNAL_ERROR;
+                            return false;
+                        }
+                    }
+
+                    fprintf(outputFile, "G%hhu %s\n", baseReg, var->identifier);
+                }
+                else
+                {
+                    // Somewhere in the function frame
+                                        switch (var->type.size)
+                    {
+                        case 1:
+                        {
+                            PUT(DSB_LOAD_C_OB);
+                            break;
+                        }
+                        case 2:
+                        {
+                            PUT(DSB_LOAD_H_OB);
+                            break;
+                        }
+                        case 4:
+                        {
+                            PUT(DSB_LOAD_OB);
+                            break;
+                        }
+                        default:
+                        {
+                            INTERNAL_ERROR;
+                            return false;
+                        }
+                    }
+
+                    fprintf(outputFile, "G%hhu %u\n", baseReg, var->offsetInFunc);
+                }
+            }
+            break;
+        }
+        case et_literal_e:
+        {
+            PUT(DSB_MOVE); fprintf(outputFile, "G%hhu %u\n", baseReg, exp->contents.literal);
+            break;
+        }
+        case et_stringLiteral_e:
+        {
+            fprintf(outputFile, "    //TODO string literal\n");
+            break;
+        }
+        case et_unary_e:
+        {
+            fprintf(outputFile, "    //TODO unary\n");
+            break;
+        }
+        case et_binary_e:
+        {
+            switch (exp->contents.binary.operation)
+            {
+                case op_assignment_e:
+                {
+                    // TODO optimize for direct assignment
+                    if (false == outputExpressionInternal(exp->contents.binary.operand1,
+                                                          baseReg,
+                                                          false) ||
+                        false == outputExpressionInternal(exp->contents.binary.operand2,
+                                                          baseReg + 1,
+                                                          true))
+                    {
+                        return false;
+                    }
+
+                    switch (exp->contents.binary.operand2->resultingType.size)
+                    {
+                        case 1:
+                        {
+                            PUT(DSB_STOR_C_OA);
+                            break;
+                        }
+                        case 2:
+                        {
+                            PUT(DSB_STOR_H_OA);
+                            break;
+                        }
+                        case 4:
+                        {
+                            PUT(DSB_STOR_OA);
+                            break;
+                        }
+                        default:
+                        {
+                            INTERNAL_ERROR;
+                            return false;
+                        }
+                    }
+
+                    fprintf(outputFile, "G%hhu G%hhu\n", baseReg, baseReg + 1);
+                    break;
+                }
+                default:
+                {
+                    fprintf(outputFile, "    //TODO binary operation %d\n",
+                            exp->contents.binary.operation);
+                    break;
+                }
+            }
+            break;
+        }
+        case et_trinary_e:
+        {
+            fprintf(outputFile, "    //TODO trinary\n");
+            break;
+        }
+        case et_functionCall_e:
+        {
+            fprintf(outputFile, "    //TODO: function call\n");
+            break;
+        }
+    }
+    return true;
+}
+
 static bool outputExpression(expression_t *exp)
 {
-    // TODO
-    fprintf(outputFile, "    //TODO: expressions\n");
-    return true;
+    if (NULL == exp)
+    {
+        INTERNAL_ERROR;
+        return false;
+    }
+
+    return outputExpressionInternal(exp, 0, false);
 }
 
 // Forward declaration
@@ -66,8 +240,8 @@ static bool outputIf(if_t *ifData)
             }
 
             outputExpression(ifData->condition);
-            fprintf(outputFile, "    COMP          G0 0\n");
-            fprintf(outputFile, "    BREQ          ");
+            PUT(DSB_COMP); fprintf(outputFile, "G0 0\n");
+            PUT(DSB_BREQ);
             if (NULL == ifData->next)
             {
                 fprintf(outputFile, "__doneIf_%u__\n", endId);
@@ -82,7 +256,7 @@ static bool outputIf(if_t *ifData)
 
         if (NULL != ifData->next)
         {
-            fprintf(outputFile, "    BRAL          __doneIf_%u__\n", endId);
+            PUT(DSB_BRAL); fprintf(outputFile, "__doneIf_%u__\n", endId);
         }
 
         ifData = ifData->next;
@@ -103,7 +277,7 @@ static bool outputStackFrame(stackFrame_t *sf)
     // Align SP
     if (sf->varSize > 0)
     {
-        fprintf(outputFile, "    ADD           SP SP %u\n", sf->varSize);
+        PUT(DSB_ADD); fprintf(outputFile, "SP SP %u\n", sf->varSize);
     }
 
     for (voidContainer_t *vc = sf->codeBlock.firstItem; vc != NULL; vc = vc->nextVoidContainer)
@@ -149,7 +323,7 @@ static bool outputStackFrame(stackFrame_t *sf)
         // deal with the SP. Also if this is a non-void function, this
         // should be inaccessable due to a return being required before
         // hitting the end of the root stack frame.
-        fprintf(outputFile, "    SUB           SP SP %u\n", sf->varSize);
+        PUT(DSB_SUB); fprintf(outputFile, "SP SP %u\n", sf->varSize);
     }
 
     return true;
@@ -174,9 +348,9 @@ static bool outputFunctions()
         }
 
         // Check for stack overflow
-        fprintf(outputFile, "    ADD           G0 SP %u\n", f->definition.maxStackSize);
-        fprintf(outputFile, "    COMP          G0 0xFFC0\n");
-        fprintf(outputFile, "    BRHS          __STACK_OVERFLOW__\n");
+        PUT(DSB_ADD);  fprintf(outputFile, "G0 SP %u\n", f->definition.maxStackSize);
+        PUT(DSB_COMP); fprintf(outputFile, "G0 0xFFC0\n");
+        PUT(DSB_BRHS); fprintf(outputFile, "__STACK_OVERFLOW__\n");
 
         if (false == outputStackFrame(&f->definition))
         {
@@ -185,8 +359,8 @@ static bool outputFunctions()
 
         // Return routine
         fprintf(outputFile, "    :ret\n");
-        fprintf(outputFile, "    MOVE          SP OB\n");
-        fprintf(outputFile, "    RETURN\n");
+        PUT(DSB_MOVE); fprintf(outputFile, "SP OB\n");
+        PUT(DSB_RETURN);
     }
     return true;
 }

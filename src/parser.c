@@ -1711,6 +1711,58 @@ static bool parseExpressionInternal(stackFrame_t  *stackFrame,
     return parseExpressionInternal(stackFrame, root, newExp);
 }
 
+static bool deSugarAndSimplify(expression_t *expression)
+{
+    expression_t *tmpExp = NULL;
+
+    if (NULL == expression)
+    {
+        INTERNAL_ERROR;
+        return false;
+    }
+
+    switch (expression->expressionType)
+    {
+        case et_variable_e:
+        case et_literal_e:
+        case et_stringLiteral_e:
+        case et_functionCall_e:
+        {
+            break;
+        }
+        case et_unary_e:
+        {
+            switch (expression->contents.unary.operation)
+            {
+                case op_parenthesis_e:
+                {
+                    tmpExp = expression->contents.unary.operand;
+                    tmpExp->parent = expression->parent;
+                    memcpy(expression, tmpExp, sizeof(*expression));
+                    free(tmpExp);
+
+                    return deSugarAndSimplify(expression);
+                }
+                default:
+                {
+                    break;
+                }
+            }
+            break;
+        }
+        case et_binary_e:
+        {
+            break;
+        }
+        case et_trinary_e:
+        {
+            break;
+        }
+    }
+
+    return true;
+}
+
 static bool parseExpression(stackFrame_t  *stackFrame,
                             expression_t **root)
 {
@@ -1722,7 +1774,8 @@ static bool parseExpression(stackFrame_t  *stackFrame,
     }
 
     if (false == parseExpressionInternal(stackFrame, root, NULL) ||
-        false == evaluateType(*root))
+        false == evaluateType(*root) ||
+        false == deSugarAndSimplify(*root))
     {
         freeExpression(root);
         return false;
@@ -1795,6 +1848,7 @@ static bool createVariable(type_t         *varType,
 
     newVar->identifier = strcpy(calloc(strlen(identifier) + 1, sizeof(char)), identifier);
     memcpy(&(newVar->type), varType, sizeof(*varType));
+    newVar->offsetInFunc = -1;
 
     if (NULL == targetVarList->first)
     {

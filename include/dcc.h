@@ -9,8 +9,10 @@
 #include <dirent.h>
 #include <unistd.h>
 #include <sys/stat.h>
+#include <stdint.h>
 
 #include "parsedStructs.h"
+#include "dsbUtils.h"
 
 #define INTERNAL_ERROR printf("Internal error: %s:%d\n", __FUNCTION__, __LINE__)
 #define ALLOC_ERROR printf("Memory allocation failure\n")
