@@ -20,6 +20,7 @@
 #define ERROR_ARGS(file, line, buf, msg, ...) printf("%s:%d: error: " msg "\n  %d | %s", file, line, __VA_ARGS__, line, buf)
 
 #define TEMP_DIRECTORY "dTemp"
+#define GLOBALS_DSB_FILE "dTemp/__GLOBALS__.dsb"
 
 #define PREPRO_FILE_EXTENSION "di"
 #define DSB_FILE_EXTENSION    "dsb"
@@ -31,8 +32,8 @@
 #define PREPRO_DIRECTIVE_DEFINE  "define"
 
 bool preprocessor(char *inName, char *outName, char **includes);
-parsedData_t *parse(char *inputFileName, char *outputFilenNme);
-bool output(parsedData_t *parsedData);
+parsedData_t *parse(char *inputFileName);
+bool output(parsedData_t *parsedData, char *dsbFileName);
 
 extern char *g_keywords[];
 

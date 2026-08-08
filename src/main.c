@@ -154,6 +154,25 @@ static void removeTmpDirectory()
     system(command);
 }
 
+static bool prepareGlobals()
+{
+    FILE *globalFile = NULL;
+
+    globalFile = fopen(GLOBALS_DSB_FILE, "w");
+
+    if (NULL == globalFile)
+    {
+        INTERNAL_ERROR;
+        return false;
+    }
+
+    fprintf(globalFile, ".section __GLOBALS__\n");
+
+    fclose(globalFile);
+
+    return true;
+}
+
 int main(int argc, char *argv[])
 {
     int   rc               = 0;
@@ -169,7 +188,8 @@ int main(int argc, char *argv[])
         return rc;
     }
 
-    if (false == createTmpDirectory())
+    if (false == createTmpDirectory() ||
+        false == prepareGlobals())
     {
         success = false;
         goto fail;
@@ -193,7 +213,7 @@ int main(int argc, char *argv[])
         free(fileName);
 
         if (false == preprocessor(s->str, preproName, inc) ||
-            false == output(parse(preproName, dsbName)))
+            false == output(parse(preproName), dsbName))
         {
             success = false;
             continue;

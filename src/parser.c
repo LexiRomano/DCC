@@ -3036,6 +3036,7 @@ static void DEBUG_printStackFrame(int padding, stackFrame_t *sf)
 
 static void printDebug()
 {
+    printf("FILE: %s", fileName);
     PRINT_DEBUG_BANNER;
     printf("Typedefs:\n");
     if (NULL == typedefs->first)
@@ -3159,10 +3160,9 @@ static void printDebug()
 }
 // DEBUG
 
-parsedData_t *parse(char *inputFileName, char *outputFileName)
+parsedData_t *parse(char *inputFileName)
 {
-    if (NULL == inputFileName ||
-        NULL == outputFileName)
+    if (NULL == inputFileName)
     {
         INTERNAL_ERROR;
         return NULL;
@@ -3203,12 +3203,12 @@ parsedData_t *parse(char *inputFileName, char *outputFileName)
         return NULL;
     }
 
-    fclose(inputFile);
-    free(fileName);
-
     // DEBUG
     printDebug();
     // DEBUG
+
+    fclose(inputFile);
+    free(fileName);
 
     return parsedData;
 }
