@@ -5,9 +5,15 @@ unsigned short int myVar;
 
 short unsigned int emptyFunc();
 
-void myFunc(int param1, unsigned char param2, uint8_t param3)
+void myFunc(short int param1, unsigned char param2, uint8_t param3)
 {
-    something = ~param1 + (myVar << 3);
+    char a;
+    char b;
+
+    if (a > b)
+    {
+
+    }
 }
 
 uint8_t anotherOne;

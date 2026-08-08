@@ -111,6 +111,30 @@ static bool outputExpressionInternal(expression_t *exp, uint8_t baseReg, bool fo
 
                     fprintf(outputFile, "G%hhu %u\n", baseReg, var->offsetInFunc);
                 }
+
+                // Sign extension for 8/16 bit signed numbers
+                if (isTypeSigned(&var->type) &&
+                    4 != var->type.size)
+                {
+                    unsigned int expressionId = ftell(outputFile);
+
+                    if (1 == var->type.size)
+                    {
+                        PUT(DSB_COMP); fprintf(outputFile, "G%hhu 0x80\n", baseReg);
+                        PUT(DSB_BRLO); fprintf(outputFile, "__skipSigExt_%u__\n", expressionId);
+                        PUT(DSB_NOT);  fprintf(outputFile, "G%hhu G%hhu\n", baseReg, baseReg);
+                        PUT(DSB_XOR);  fprintf(outputFile, "G%hhu G%hhu 0xFF\n", baseReg, baseReg);
+                    }
+                    else
+                    {
+                        PUT(DSB_COMP); fprintf(outputFile, "G%hhu 0x8000\n", baseReg);
+                        PUT(DSB_BRLO); fprintf(outputFile, "__skipSigExt_%u__\n", expressionId);
+                        PUT(DSB_NOT);  fprintf(outputFile, "G%hhu G%hhu\n", baseReg, baseReg);
+                        PUT(DSB_XOR);  fprintf(outputFile, "G%hhu G%hhu 0xFFFF\n", baseReg, baseReg);
+                    }
+
+                    fprintf(outputFile, "    :__skipSigExt_%u__\n", expressionId);
+                }
             }
             break;
         }
@@ -238,6 +262,105 @@ static bool outputExpressionInternal(expression_t *exp, uint8_t baseReg, bool fo
                         {INTERNAL_ERROR;return false;}
                     }
                     fprintf(outputFile, "G%hhu G%hhu G%hhu\n", baseReg, baseReg, baseReg + 1);
+                    break;
+                }
+                case op_equals_e:
+                case op_notEquals_e:
+                case op_greaterThan_e:
+                case op_greaterEqual_e:
+                case op_lessEqual_e:
+                case op_lessThan_e:
+                {
+                    bool         isSignedComparison = false;
+                    unsigned int statementId        = 0;
+
+                    if (false == outputExpressionInternal(exp->contents.binary.operand1,
+                                                          baseReg,
+                                                          false) ||
+                        false == outputExpressionInternal(exp->contents.binary.operand2,
+                                                          baseReg + 1,
+                                                          false))
+                    {
+                        return false;
+                    }
+
+                    statementId = ftell(outputFile);
+
+                    if (isTypeSigned(&exp->contents.binary.operand1->resultingType) &&
+                        isTypeSigned(&exp->contents.binary.operand2->resultingType))
+                    {
+                        isSignedComparison = true;
+                    }
+
+                    PUT(DSB_COMP);fprintf(outputFile, "G%hhu G%hhu\n", baseReg, baseReg + 1);
+
+                    switch (exp->contents.binary.operation)
+                    {
+                        case op_equals_e:
+                        {PUT(DSB_BREQ);break;}
+
+                        case op_notEquals_e:
+                        {PUT(DSB_BRNE);break;}
+                        
+                        case op_greaterThan_e:
+                        {
+                            if (isSignedComparison)
+                            {
+                                PUT(DSB_BRGT);
+                            }
+                            else
+                            {
+                                PUT(DSB_BRHI);
+                            }
+                            break;
+                        }
+                        case op_greaterEqual_e:
+                        {
+                            if (isSignedComparison)
+                            {
+                                PUT(DSB_BRGE);
+                            }
+                            else
+                            {
+                                PUT(DSB_BRHS);
+                            }
+                            break;
+                        }
+                        case op_lessEqual_e:
+                        {
+                            if (isSignedComparison)
+                            {
+                                PUT(DSB_BRLE);
+                            }
+                            else
+                            {
+                                PUT(DSB_BRLS);
+                            }
+                            break;
+                        }
+                        case op_lessThan_e:
+                        {
+                            if (isSignedComparison)
+                            {
+                                PUT(DSB_BRLT);
+                            }
+                            else
+                            {
+                                PUT(DSB_BRLO);
+                            }
+                            break;
+                        }
+                        default:
+                        {INTERNAL_ERROR;return false;}
+                    }
+
+                                   fprintf(outputFile, "__isTrue_%u__\n", statementId);
+                    PUT(DSB_MOVE); fprintf(outputFile, "G%hhu 0\n", baseReg);
+                    PUT(DSB_BRAL); fprintf(outputFile, "__wasFalse_%u__\n", statementId);
+                                   fprintf(outputFile, "    :__isTrue_%u__\n", statementId);
+                    PUT(DSB_MOVE); fprintf(outputFile, "G%hhu 1\n", baseReg);
+                                   fprintf(outputFile, "    :__wasFalse_%u__\n", statementId);
+
                     break;
                 }
                 default:

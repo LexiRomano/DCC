@@ -22,7 +22,16 @@
 #define DSB_COMP      "    COMP          "
 #define DSB_BRAL      "    BRAL          "
 #define DSB_BREQ      "    BREQ          "
+#define DSB_BRNE      "    BRNE          "
+#define DSB_BRHI      "    BRHI          "
 #define DSB_BRHS      "    BRHS          "
+#define DSB_BRLS      "    BRLS          "
+#define DSB_BRLO      "    BRLO          "
+#define DSB_BRGT      "    BRGT          "
+#define DSB_BRGE      "    BRGE          "
+#define DSB_BRLE      "    BRLE          "
+#define DSB_BRLT      "    BRLT          "
+#define DSB_BRMI      "    BRMI          "
 #define DSB_RETURN    "    RETURN\n"
 
 #endif //__DSB_UTILS_H__

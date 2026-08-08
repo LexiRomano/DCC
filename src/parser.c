@@ -869,8 +869,10 @@ static bool evaluateType(expression_t *exp)
                 }
                 case op_equals_e:
                 case op_notEquals_e:
-                case op_lessThan_e:
+                case op_greaterThan_e:
                 case op_greaterEqual_e:
+                case op_lessEqual_e:
+                case op_lessThan_e:
                 {
                     if ((isTypeRaw(childType1) || isTypePointer(childType1)) &&
                         (isTypeRaw(childType2) || isTypePointer(childType2)))
@@ -1774,8 +1776,6 @@ static bool parseExpression(stackFrame_t  *stackFrame,
         return false;
     }
 
-    printf("111\n");
-
     if (false == parseExpressionInternal(stackFrame, root, NULL) ||
         false == evaluateType(*root) ||
         false == deSugarAndSimplify(*root))
@@ -1783,8 +1783,6 @@ static bool parseExpression(stackFrame_t  *stackFrame,
         freeExpression(root);
         return false;
     }
-
-    printf("222\n");
 
     return true;
 }

@@ -1264,3 +1264,21 @@ void freeParsedDataContents(parsedData_t *p)
     freeVariableListContents(&p->globalVariables);
     freeFunctionListContents(&p->functions);
 }
+
+bool isTypeSigned(type_t *t)
+{
+    if (NULL == t)
+    {
+        return false;
+    }
+
+    if (t->isRaw &&
+        (uint_e  == t->type.rawType ||
+         huint_e == t->type.rawType ||
+         uchar_e == t->type.rawType))
+    {
+        return false;
+    }
+
+    return true;
+}
