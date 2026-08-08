@@ -126,7 +126,27 @@ static bool outputExpressionInternal(expression_t *exp, uint8_t baseReg, bool fo
         }
         case et_unary_e:
         {
-            fprintf(outputFile, "    //TODO unary\n");
+            switch (exp->contents.unary.operation)
+            {
+                case op_bitwiseNot_e:
+                {
+                    if (false == outputExpressionInternal(exp->contents.binary.operand1,
+                                                          baseReg,
+                                                          false))
+                    {
+                        return false;
+                    }
+
+                    PUT(DSB_NOT); fprintf(outputFile, "G%hhu G%hhu\n", baseReg, baseReg);
+                    break;
+                }
+                default:
+                {
+                    fprintf(outputFile, "    //TODO unary operation %d\n",
+                            exp->contents.unary.operation);
+                    break;
+                }
+            }
             break;
         }
         case et_binary_e:
@@ -171,6 +191,53 @@ static bool outputExpressionInternal(expression_t *exp, uint8_t baseReg, bool fo
                     }
 
                     fprintf(outputFile, "G%hhu G%hhu\n", baseReg, baseReg + 1);
+                    break;
+                }
+                case op_addition_e:
+                case op_subtraction_e:
+                case op_bitshiftLeft_e:
+                case op_bitshiftRight_e:
+                case op_bitwiseAnd_e:
+                case op_bitwiseOr_e:
+                case op_bitwiseXor_e:
+                {
+                    if (false == outputExpressionInternal(exp->contents.binary.operand1,
+                                                          baseReg,
+                                                          false) ||
+                        false == outputExpressionInternal(exp->contents.binary.operand2,
+                                                          baseReg + 1,
+                                                          false))
+                    {
+                        return false;
+                    }
+
+                    switch (exp->contents.binary.operation)
+                    {
+                        case op_addition_e:
+                        {PUT(DSB_ADD);break;}
+
+                        case op_subtraction_e:
+                        {PUT(DSB_SUB);break;}
+
+                        case op_bitshiftLeft_e:
+                        {PUT(DSB_BSLT);break;}
+
+                        case op_bitshiftRight_e:
+                        {PUT(DSB_BSRT);break;}
+
+                        case op_bitwiseAnd_e:
+                        {PUT(DSB_AND);break;}
+
+                        case op_bitwiseOr_e:
+                        {PUT(DSB_OR);break;}
+
+                        case op_bitwiseXor_e:
+                        {PUT(DSB_XOR);break;}
+
+                        default:
+                        {INTERNAL_ERROR;return false;}
+                    }
+                    fprintf(outputFile, "G%hhu G%hhu G%hhu\n", baseReg, baseReg, baseReg + 1);
                     break;
                 }
                 default:

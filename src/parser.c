@@ -1752,7 +1752,8 @@ static bool deSugarAndSimplify(expression_t *expression)
         }
         case et_binary_e:
         {
-            break;
+            return deSugarAndSimplify(expression->contents.binary.operand1) &&
+                   deSugarAndSimplify(expression->contents.binary.operand2);
         }
         case et_trinary_e:
         {
@@ -1773,6 +1774,8 @@ static bool parseExpression(stackFrame_t  *stackFrame,
         return false;
     }
 
+    printf("111\n");
+
     if (false == parseExpressionInternal(stackFrame, root, NULL) ||
         false == evaluateType(*root) ||
         false == deSugarAndSimplify(*root))
@@ -1780,6 +1783,8 @@ static bool parseExpression(stackFrame_t  *stackFrame,
         freeExpression(root);
         return false;
     }
+
+    printf("222\n");
 
     return true;
 }
@@ -3132,6 +3137,7 @@ static void DEBUG_printExpression(expression_t *exp)
                 case op_dereference_e:
                 case op_reference_e:
                 case op_negative_e:
+                case op_bitwiseNot_e:
                 {
                     printf("<%s", operatorTokens[exp->contents.unary.operation]);
                     DEBUG_printExpression(exp->contents.unary.operand);
