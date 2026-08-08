@@ -965,13 +965,36 @@ void freeFunctionContents(function_t *func)
         freeStringLinkedListContents(&(func->parameterNames));
     }
 
-    /*
-    // TODO
+
     if (NULL != func->definition.codeBlock.firstItem)
     {
         freeVoidListContents(&(func->definition.codeBlock));
     }
-    */
+}
+
+void freeFunctionListContents(functionList_t *fl)
+{
+    function_t *cur;
+    function_t *nxt;
+
+    if (NULL == fl ||
+        NULL == fl->first)
+    {
+        return;
+    }
+
+    cur = fl->first;
+
+    while (NULL != cur)
+    {
+        nxt = cur->next;
+
+        freeFunctionContents(cur);
+
+        free(cur);
+
+        cur = nxt;
+    }
 }
 
 variable_t *findVariable(variableList_t *varList, char *ident)
@@ -994,7 +1017,7 @@ variable_t *findVariable(variableList_t *varList, char *ident)
     return NULL;
 }
 
-void freeVariableList(variableList_t *varList)
+void freeVariableListContents(variableList_t *varList)
 {
     variable_t *cur = NULL;
     variable_t *nxt = NULL;
@@ -1180,4 +1203,43 @@ void freeExpression(expression_t **exp)
 
     free(*exp);
     *exp = NULL;
+}
+
+void freeTypedefListContents(typedefs_t *t)
+{
+    typedef_t *cur;
+    typedef_t *nxt;
+
+    if (NULL == t)
+    {
+        return;
+    }
+
+    cur = t->first;
+
+    while (cur != NULL)
+    {
+        nxt = cur->next;
+
+        if (NULL != cur->identifier)
+        {
+            free(cur->identifier);
+        }
+
+        free(cur);
+
+        cur = nxt;
+    }
+}
+
+void freeParsedDataContents(parsedData_t *p)
+{
+    if (NULL == p)
+    {
+        return;
+    }
+
+    freeTypedefListContents(&p->typedefs);
+    freeVariableListContents(&p->globalVariables);
+    freeFunctionListContents(&p->functions);
 }

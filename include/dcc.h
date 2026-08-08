@@ -13,6 +13,7 @@
 #include "parsedStructs.h"
 
 #define INTERNAL_ERROR printf("Internal error: %s:%d\n", __FUNCTION__, __LINE__)
+#define ALLOC_ERROR printf("Memory allocation failure\n")
 
 // buf is expected to contain a newline
 #define ERROR(file, line, buf, msg)           printf("%s:%d: error: " msg "\n  %d | %s", file, line, line, buf)
@@ -30,7 +31,8 @@
 #define PREPRO_DIRECTIVE_DEFINE  "define"
 
 bool preprocessor(char *inName, char *outName, char **includes);
-bool compile(char *inputFileName, char *outputFilenNme);
+parsedData_t *parse(char *inputFileName, char *outputFilenNme);
+bool output(parsedData_t *parsedData);
 
 extern char *g_keywords[];
 
@@ -59,13 +61,16 @@ strll_t *addStringLinkedList(stringLinkedList_t *list);
 void freeStringLinkedListContents(stringLinkedList_t *list);
 
 void freeFunctionContents(function_t *func);
+void freeFunctionListContents(functionList_t *fl);
 
 variable_t *findVariable(variableList_t *varList, char *ident);
-void freeVariableList(variableList_t *varList);
+void freeVariableListContents(variableList_t *varList);
 
 voidContainer_t *addVoidContainer(voidList_t *vl);
 void freeVoidListContents(voidList_t *vl);
 
 void freeExpression(expression_t **exp);
+
+void freeParsedDataContents(parsedData_t *p);
 
 #endif //__DCC_H__

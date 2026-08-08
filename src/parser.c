@@ -9,9 +9,11 @@ static int offsetRewind = 0;
 
 static bool  error      = false;
 
-static typedefs_t     typedefs        = {0};
-static variableList_t globalVariables = {0};
-static functionList_t functions       = {0};
+static typedefs_t     *typedefs        = NULL;
+static variableList_t *globalVariables = NULL;
+static functionList_t *functions       = NULL;
+
+static parsedData_t *parsedData = NULL;
 
 
 char *g_keywords[] =
@@ -456,7 +458,7 @@ static type_t *findType(char *str)
         return out;
     }
 
-    for (typedef_t *t = typedefs.first; NULL != t; t = t->next)
+    for (typedef_t *t = typedefs->first; NULL != t; t = t->next)
     {
         if (0 == strcmp(str, t->identifier))
         {
@@ -1534,7 +1536,7 @@ static bool parseExpressionInternal(stackFrame_t  *stackFrame,
             }
         }
 
-        if (NULL != (tmpVar = findVariable(&globalVariables, token)))
+        if (NULL != (tmpVar = findVariable(globalVariables, token)))
         {
             goto foundVariable;
         }
@@ -2025,15 +2027,15 @@ static void doTypedef()
     newTypedef->simplifiesToRawType = isTypeRaw(foundType);
     memcpy(&(newTypedef->content.typeExtension), foundType, sizeof(*foundType));
 
-    if (NULL == typedefs.first)
+    if (NULL == typedefs->first)
     {
-        typedefs.first = newTypedef;
-        typedefs.last  = newTypedef;
+        typedefs->first = newTypedef;
+        typedefs->last  = newTypedef;
         return;
     }
 
-    typedefs.last->next = newTypedef;
-    typedefs.last       = newTypedef;
+    typedefs->last->next = newTypedef;
+    typedefs->last       = newTypedef;
 }
 
 // Forward declaration
@@ -2417,7 +2419,7 @@ static bool processStackFrame(stackFrame_t *stackFrame)
     // Error path
     drainToEndOfBlock(true);
     freeVoidListContents(&(stackFrame->codeBlock));
-    freeVariableList(&(stackFrame->variables));
+    freeVariableListContents(&(stackFrame->variables));
     error = true;
 
     return false;
@@ -2579,15 +2581,15 @@ static void processFunction(type_t *returnType,
     memcpy(&newFunction.returnType, returnType, sizeof(*returnType));
     newFunction.identifier = strcpy(calloc(strlen(identifier) + 1, sizeof(char)), identifier);
 
-    if (NULL == functions.first)
+    if (NULL == functions->first)
     {
-        functions.first = memcpy(calloc(1, sizeof(newFunction)), &newFunction, sizeof(newFunction));
-        functions.last  = functions.first;
+        functions->first = memcpy(calloc(1, sizeof(newFunction)), &newFunction, sizeof(newFunction));
+        functions->last  = functions->first;
     }
     else
     {
-        functions.last->next = memcpy(calloc(1, sizeof(newFunction)), &newFunction, sizeof(newFunction));
-        functions.last       = functions.last->next;
+        functions->last->next = memcpy(calloc(1, sizeof(newFunction)), &newFunction, sizeof(newFunction));
+        functions->last       = functions->last->next;
     }
 }
 
@@ -2625,14 +2627,14 @@ static bool intake()
                 if (0 == strcmp("=", token))
                 {
                     // variable declaration + assignment
-                    createVariable(foundType, ident, &globalVariables, NULL, true);
+                    createVariable(foundType, ident, globalVariables, NULL, true);
                     break;
                 }
                 if (0 == strcmp(";", token))
                 {
                     // variable declaration
 
-                    createVariable(foundType, ident, &globalVariables, NULL, false);
+                    createVariable(foundType, ident, globalVariables, NULL, false);
 
                     break;
                 }
@@ -3025,13 +3027,13 @@ static void printDebug()
 {
     PRINT_DEBUG_BANNER;
     printf("Typedefs:\n");
-    if (NULL == typedefs.first)
+    if (NULL == typedefs->first)
     {
         printf("  NONE\n");
     }
     else
     {
-        for (typedef_t *t = typedefs.first; NULL != t; t = t->next)
+        for (typedef_t *t = typedefs->first; NULL != t; t = t->next)
         {
             printf("  %s is ", t->identifier);
             switch (t->typedefType)
@@ -3065,13 +3067,13 @@ static void printDebug()
     PRINT_DEBUG_BANNER;
 
     printf("Global variables:\n");
-    if (NULL == globalVariables.first)
+    if (NULL == globalVariables->first)
     {
         printf("  NONE\n");
     }
     else
     {
-        for (variable_t *v = globalVariables.first; NULL != v; v = v->next)
+        for (variable_t *v = globalVariables->first; NULL != v; v = v->next)
         {
             printf ("  %s is of type ", v->identifier);
             DEBUG_printType(&v->type);
@@ -3089,13 +3091,13 @@ static void printDebug()
     PRINT_DEBUG_BANNER;
 
     printf("Functions:\n");
-    if (NULL == functions.first)
+    if (NULL == functions->first)
     {
         printf(" NONE\n");
     }
     else
     {
-        for (function_t *f = functions.first; NULL != f; f = f->next)
+        for (function_t *f = functions->first; NULL != f; f = f->next)
         {
             printf("  %s:\n", f->identifier);
 
@@ -3146,13 +3148,13 @@ static void printDebug()
 }
 // DEBUG
 
-bool compile(char *inputFileName, char *outputFileName)
+parsedData_t *parse(char *inputFileName, char *outputFileName)
 {
     if (NULL == inputFileName ||
         NULL == outputFileName)
     {
         INTERNAL_ERROR;
-        return false;
+        return NULL;
     }
 
     inputFile = fopen(inputFileName, "r");
@@ -3160,17 +3162,34 @@ bool compile(char *inputFileName, char *outputFileName)
     if (NULL == inputFile)
     {
         printf("Could not open %s\n", inputFileName);
-        return false;
+        return NULL;
     }
 
-    fileName = strcpy(calloc(strlen(inputFileName) + 1, sizeof(char)),
-                      inputFileName);
+    fileName = strdup(inputFileName);
+
+    if (NULL == fileName)
+    {
+        ALLOC_ERROR;
+        return NULL;
+    }
+
+    parsedData = calloc(1, sizeof(*parsedData));
+    if (NULL == parsedData)
+    {
+        ALLOC_ERROR;
+        return NULL;
+    }
+    typedefs        = &parsedData->typedefs;
+    globalVariables = &parsedData->globalVariables;
+    functions       = &parsedData->functions;
 
     if (false == intake())
     {
         fclose(inputFile);
         free(fileName);
-        return false;
+        freeParsedDataContents(parsedData);
+        free(parsedData);
+        return NULL;
     }
 
     fclose(inputFile);
@@ -3180,5 +3199,5 @@ bool compile(char *inputFileName, char *outputFileName)
     printDebug();
     // DEBUG
 
-    return true;
+    return parsedData;
 }

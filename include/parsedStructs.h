@@ -326,4 +326,11 @@ typedef struct if_t
     struct if_t *next;
 } if_t;
 
+typedef struct
+{
+    typedefs_t     typedefs;
+    variableList_t globalVariables;
+    functionList_t functions;
+} parsedData_t;
+
 #endif //__PARSED_STRUCTS_H__

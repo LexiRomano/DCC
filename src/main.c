@@ -193,7 +193,7 @@ int main(int argc, char *argv[])
         free(fileName);
 
         if (false == preprocessor(s->str, preproName, inc) ||
-            false == compile(preproName, dsbName))
+            false == output(parse(preproName, dsbName)))
         {
             success = false;
             continue;
