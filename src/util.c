@@ -645,6 +645,25 @@ strll_t *addStringLinkedList(stringLinkedList_t *list)
     return list->last;
 }
 
+strll_t *findStringLinkedList(stringLinkedList_t *list, char *target)
+{
+    if (NULL == list ||
+        NULL == target)
+    {
+        return NULL;
+    }
+
+    for (strll_t *s = list->first; NULL != s; s = s->next)
+    {
+        if (0 == strcmp(target, s->str))
+        {
+            return s;
+        }
+    }
+
+    return NULL;
+}
+
 void freeStringLinkedListContents(stringLinkedList_t *list)
 {
     strll_t *current = NULL;

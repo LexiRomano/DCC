@@ -189,6 +189,8 @@ typedef struct stackFrame_t
     struct stackFrame_t *prevAccessableStackFrame;
     codeBlock_t          codeBlock;
     variableList_t       variables;
+    unsigned int         varSize;
+    unsigned int         maxStackSize;
 } stackFrame_t;
 
 typedef struct function_t
@@ -198,8 +200,9 @@ typedef struct function_t
     typeList_t         parameterTypes;
     stringLinkedList_t parameterNames;
     
-    bool         isDefined;
-    stackFrame_t definition;
+    bool               isDefined;
+    stackFrame_t       definition;
+    stringLinkedList_t requiredSymbols;
 
     struct function_t *next;
 } function_t;

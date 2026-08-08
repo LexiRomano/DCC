@@ -13,7 +13,7 @@ void myFunc(int param1, unsigned char param2, uint8_t param3)
     unsigned short int d        = 100;
     char              *myString = "Hello!";
 
-    (b - a) * (-a == c) * d;
+    (b - a) * (-a == c) * d + param1;
 
     a += a * 0b1101;
 
@@ -29,7 +29,8 @@ void myFunc(int param1, unsigned char param2, uint8_t param3)
     }
     else if (b == c)
     {
-        a = b;
+        int q;
+        q = b;
     }
     else
     {

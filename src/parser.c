@@ -1,8 +1,9 @@
 #include "dcc.h"
 
-static FILE *inputFile  = NULL;
-static int   lineNumber = 1;
-static char *fileName   = NULL;
+static FILE       *inputFile       = NULL;
+static int         lineNumber      = 1;
+static char       *fileName        = NULL;
+static function_t *currentFunction = NULL;
 
 static int lineRewind = 1;
 static int offsetRewind = 0;
@@ -1265,12 +1266,13 @@ static bool parseExpressionInternal(stackFrame_t  *stackFrame,
                                     expression_t **root,
                                     expression_t  *prevExp)
 {
-    char          *token   = NULL;
-    variable_t    *tmpVar  = NULL;
-    expression_t  *newExp  = NULL;
-    expression_t  *newExp2 = NULL;
-    expression_t **insert  = NULL;
-    unsigned int   literal = 0;
+    char          *token    = NULL;
+    variable_t    *tmpVar   = NULL;
+    expression_t  *newExp   = NULL;
+    expression_t  *newExp2  = NULL;
+    expression_t **insert   = NULL;
+    unsigned int   literal  = 0;
+    strll_t       *tmpStrll = NULL;
 
     if (NULL == root)
     {
@@ -1543,6 +1545,21 @@ static bool parseExpressionInternal(stackFrame_t  *stackFrame,
 
         if (NULL != (tmpVar = findVariable(globalVariables, token)))
         {
+            if (NULL != currentFunction)
+            {
+                tmpStrll = findStringLinkedList(&currentFunction->requiredSymbols, token);
+                if (NULL == tmpStrll)
+                {
+                    tmpStrll = addStringLinkedList(&currentFunction->requiredSymbols);
+                    if (NULL == tmpStrll)
+                    {
+                        ALLOC_ERROR;
+                        free(token);
+                        return false;
+                    }
+                    tmpStrll->str = strdup(token);
+                }
+            }
             goto foundVariable;
         }
 
@@ -1718,7 +1735,6 @@ static bool parseExpression(stackFrame_t  *stackFrame,
 static bool createVariable(type_t         *varType,
                            char           *identifier,
                            variableList_t *targetVarList,
-                           stackFrame_t   *stackFrame,
                            bool            parseValue)
 {
     variable_t *newVar   = NULL;
@@ -2207,6 +2223,11 @@ static bool processStackFrame(stackFrame_t *stackFrame)
                     continue;
                 }
 
+                if (newIf->consequence.maxStackSize > stackFrame->maxStackSize - stackFrame->varSize)
+                {
+                    stackFrame->maxStackSize = newIf->consequence.maxStackSize + stackFrame->varSize;
+                }
+
                 tmpVoidContainer->type = if_e;
                 tmpVoidContainer->data = newIf;
                 newIf = NULL;
@@ -2244,6 +2265,11 @@ static bool processStackFrame(stackFrame_t *stackFrame)
             {
                 if (parseIfStatement(stackFrame, &newIf))
                 {
+                    if (newIf->consequence.maxStackSize > stackFrame->maxStackSize - stackFrame->varSize)
+                    {
+                        stackFrame->maxStackSize = newIf->consequence.maxStackSize + stackFrame->varSize;
+                    }
+
                     newIf->parent = tmpVoidContainer->data;
 
                     tmpVoidContainer = addVoidContainer(&stackFrame->codeBlock);
@@ -2264,6 +2290,11 @@ static bool processStackFrame(stackFrame_t *stackFrame)
             {
                 free(newIf);
                 continue;
+            }
+
+            if (newIf->consequence.maxStackSize > stackFrame->maxStackSize - stackFrame->varSize)
+            {
+                stackFrame->maxStackSize = newIf->consequence.maxStackSize + stackFrame->varSize;
             }
 
             newIf->parent = tmpVoidContainer->data;
@@ -2315,6 +2346,11 @@ static bool processStackFrame(stackFrame_t *stackFrame)
                 {
                     INTERNAL_ERROR;
                     continue;
+                }
+
+                if (tmpStackFrame->maxStackSize > stackFrame->maxStackSize - stackFrame->varSize)
+                {
+                    stackFrame->maxStackSize = tmpStackFrame->maxStackSize + stackFrame->varSize;
                 }
 
                 tmpVoidContainer->data = tmpStackFrame;
@@ -2386,10 +2422,14 @@ static bool processStackFrame(stackFrame_t *stackFrame)
             if (false == createVariable(tmpType,
                                         ident,
                                         &stackFrame->variables,
-                                        stackFrame,
                                         0 == strcmp("=", token)))
             {
                 rc = false;
+            }
+            else
+            {
+                stackFrame->varSize      += tmpType->size;
+                stackFrame->maxStackSize += tmpType->size;
             }
             free(tmpType);
             tmpType = NULL;
@@ -2432,6 +2472,40 @@ static bool processStackFrame(stackFrame_t *stackFrame)
     error = true;
 
     return false;
+}
+
+static bool addParamsToStackFrame(function_t *func)
+{
+    type_t  *t = NULL;
+    strll_t *n = NULL;
+
+    if (NULL == func)
+    {
+        INTERNAL_ERROR;
+        return false;
+    }
+
+    t = func->parameterTypes.first;
+    n = func->parameterNames.first;
+
+    while (t != NULL && n != NULL)
+    {
+        if (false == createVariable(t,
+                                    n->str,
+                                    &func->definition.variables,
+                                    false))
+        {
+            return false;
+        }
+
+        func->definition.varSize      += t->size;
+        func->definition.maxStackSize += t->size;
+
+        t = t->next;
+        n = n->next;
+    }
+
+    return true;
 }
 
 // The opening "(" has already been parsed
@@ -2580,8 +2654,17 @@ static void processFunction(type_t *returnType,
 
     if (0 == strcmp("{", token))
     {
-        processStackFrame(&(newFunction.definition));
+        currentFunction = &newFunction;
+        
+        if (false == addParamsToStackFrame(&newFunction) ||
+            false == processStackFrame(&(newFunction.definition)))
+        {
+            freeFunctionContents(&newFunction);
+            currentFunction = NULL;
+            return;
+        }
         newFunction.isDefined = true;
+        currentFunction = NULL;
     }
 
     free(token);
@@ -2636,14 +2719,14 @@ static bool intake()
                 if (0 == strcmp("=", token))
                 {
                     // variable declaration + assignment
-                    createVariable(foundType, ident, globalVariables, NULL, true);
+                    createVariable(foundType, ident, globalVariables, true);
                     break;
                 }
                 if (0 == strcmp(";", token))
                 {
                     // variable declaration
 
-                    createVariable(foundType, ident, globalVariables, NULL, false);
+                    createVariable(foundType, ident, globalVariables, false);
 
                     break;
                 }
@@ -2949,7 +3032,10 @@ static void DEBUG_printStackFrame(int padding, stackFrame_t *sf)
     }
 
     DEBUG_printPadding(padding);
-    printf("variables:\n");
+    printf("max stack size: %uB\n", sf->maxStackSize);
+
+    DEBUG_printPadding(padding);
+    printf("variables (%uB):\n", sf->varSize);
     if (NULL == sf->variables.first)
     {
         DEBUG_printPadding(padding + 2);
@@ -3193,6 +3279,7 @@ parsedData_t *parse(char *inputFileName)
     typedefs        = &parsedData->typedefs;
     globalVariables = &parsedData->globalVariables;
     functions       = &parsedData->functions;
+    currentFunction = NULL;
 
     if (false == intake())
     {

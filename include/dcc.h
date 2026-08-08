@@ -59,6 +59,7 @@ definition_t *getDefinition(definitionList_t *list, char *name);
 void freeDefinitionListContents(definitionList_t *list);
 
 strll_t *addStringLinkedList(stringLinkedList_t *list);
+strll_t *findStringLinkedList(stringLinkedList_t *list, char *target);
 void freeStringLinkedListContents(stringLinkedList_t *list);
 
 void freeFunctionContents(function_t *func);
