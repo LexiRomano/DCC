@@ -185,7 +185,7 @@ static bool prepareConfig()
         return false;
     }
 
-    fprintf(configFile, ".out out.bin\n");
+    fprintf(configFile, ".out " OUTPUT_FILE_NAME "\n");
     fprintf(configFile, ".source %s\n", GLOBALS_DSB_FILE);
 
     fclose(configFile);
@@ -255,13 +255,14 @@ int main(int argc, char *argv[])
 
             fclose(configFile);
         }
+        
+        if (0 != system("dssembly -k " DFG_FILE))
+        {
+            remove(OUTPUT_FILE_NAME);
+            success = false;
+        }
     }
-
-    if (0 != system("dssembly -k " DFG_FILE))
-    {
-        success = false;
-    }
-
+        
 
     if (false == keepTmp)
     {

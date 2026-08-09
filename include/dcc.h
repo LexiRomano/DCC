@@ -27,6 +27,7 @@
 #define GLOBALS_DSB_FILE "dTemp/" GLOBALS_SECTION_NAME ".dsb"
 #define DFG_FILE         "dTemp/config.dfg"
 
+#define OUTPUT_FILE_NAME "out.bin"
 
 #define PREPRO_FILE_EXTENSION "di"
 #define DSB_FILE_EXTENSION    "dsb"
@@ -55,6 +56,8 @@ bool isolateFileNameWithExtension(char *in, char **out);
 bool stringStartsWith(char *str, char c);
 bool stringEndsWith(char *str, char c);
 bool stringWrappedWith(char *str, char c);
+bool stripQuotes(char *str);
+bool proccessEscapeCharacters(char *str);
 char *getCurrentLine(FILE *file);
 bool isKeyword(char *str);
 bool isIdentifier(char *str);

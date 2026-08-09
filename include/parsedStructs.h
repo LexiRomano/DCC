@@ -38,7 +38,8 @@ typedef enum
     variable_e,
     typedef_e,
     type_e,
-    if_e
+    if_e,
+    assembly_e
 } ident_e;
 
 typedef enum
@@ -342,5 +343,7 @@ typedef struct
     variableList_t globalVariables;
     functionList_t functions;
 } parsedData_t;
+
+typedef stringLinkedList_t assembly_t;
 
 #endif //__PARSED_STRUCTS_H__

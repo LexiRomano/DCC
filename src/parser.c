@@ -21,7 +21,7 @@ char *g_keywords[] =
 {
     "int", "char", "do", "while", "for", "if", "else", "const",
     "static", "return", "continue", "break", "typedef", "struct",
-    "void", "NULL", "unsigned" "switch", "case",
+    "void", "NULL", "unsigned" "switch", "case", "__dsb__",
     NULL
 };
 
@@ -1792,13 +1792,12 @@ static bool parseExpressionInternal(stackFrame_t  *stackFrame,
 
     if (stringWrappedWith(token, '"'))
     {
-        // Take off last quote
-        token[strlen(token) - 1] = '\0';
-
-        // Take off the first quote and shift down
-        for (char *p = token; '\0' != *p; p++)
+        if (false == stripQuotes(token) ||
+            false == proccessEscapeCharacters(token))
         {
-            *p = p[1];
+            INTERNAL_ERROR;
+            free(token);
+            return false;
         }
 
         newExp                         = calloc(1, sizeof(*newExp));
@@ -1828,13 +1827,12 @@ static bool parseExpressionInternal(stackFrame_t  *stackFrame,
 
     if (stringWrappedWith(token, '\''))
     {
-        // Take off last quote
-        token[strlen(token) - 1] = '\0';
-
-        // Take off the first quote and shift down
-        for (char *p = token; '\0' != *p; p++)
+        if (false == stripQuotes(token) ||
+            false == proccessEscapeCharacters(token))
         {
-            *p = p[1];
+            INTERNAL_ERROR;
+            free(token);
+            return false;
         }
 
         if (1 == strlen(token))
@@ -2414,9 +2412,10 @@ static bool parseIfStatement(stackFrame_t *stackFrame,
 // The opening "{" has already been parsed
 static bool processStackFrame(stackFrame_t *stackFrame)
 {
-    char *token = NULL;
-    char *ident = NULL;
-    bool  rc    = true;
+    char *token      = NULL;
+    char *ident      = NULL;
+    bool  rc         = true;
+    bool  breakAgain = false;
 
     stackFrame_t    *tmpStackFrame    = NULL;
     variable_t      *tmpVar           = NULL;
@@ -2425,6 +2424,8 @@ static bool processStackFrame(stackFrame_t *stackFrame)
     expression_t    *newExpression    = NULL;
     if_t            *prevIf           = NULL;
     if_t            *newIf            = NULL;
+    assembly_t      *newAssembly      = NULL;
+    strll_t         *tmpStrll         = NULL;
 
     if (NULL == stackFrame)
     {
@@ -2583,6 +2584,90 @@ static bool processStackFrame(stackFrame_t *stackFrame)
             //TODO
             printError("switch statements not implemented");
             break;
+        }
+        if (0 == strcmp("__dsb__", token))
+        {
+            free(token);
+            token = getNextTokenCheckingForLineChange();
+
+            if (NULL == token ||
+                0    != strcmp("(", token))
+            {
+                free(token);
+                printError("expected \"(\"");
+                break;
+            }
+
+            free(token);
+
+            newAssembly = calloc(1, sizeof(*newAssembly));
+
+            if (NULL == newAssembly)
+            {
+                ALLOC_ERROR;
+                return false;
+            }
+
+            while (true)
+            {
+                token = getNextTokenCheckingForLineChange();
+
+                if (NULL == token ||
+                    (0     != strcmp(")", token) &&
+                     false == stringWrappedWith(token, '"')))
+                {
+                    printError("expected \")\" or string literal");
+                    if (NULL != token)
+                    {
+                        free(token);
+                        freeStringLinkedListContents(newAssembly);
+                        free(newAssembly);
+                    }
+                    breakAgain = true;
+                    break;
+                }
+
+                if (0 == strcmp(")", token))
+                {
+                    break;
+                }
+
+                if (false == stripQuotes(token) ||
+                    false == proccessEscapeCharacters(token))
+                {
+                    INTERNAL_ERROR;
+                    free(token);
+                    freeStringLinkedListContents(newAssembly);
+                    free(newAssembly);
+                    breakAgain = true;
+                    break;
+                }
+
+                tmpStrll = addStringLinkedList(newAssembly);
+                tmpStrll->str = token;
+                token = NULL;
+            }
+
+            if (breakAgain)
+            {
+                break;
+            }
+
+            tmpVoidContainer = addVoidContainer(&stackFrame->codeBlock);
+
+            if (NULL == tmpVoidContainer)
+            {
+                ALLOC_ERROR;
+                freeStringLinkedListContents(newAssembly);
+                free(newAssembly);
+                return false;
+            }
+
+            tmpVoidContainer->data = newAssembly;
+            tmpVoidContainer->type = assembly_e;
+            newAssembly = NULL;
+
+            continue;
         }
 
         if (0 == strcmp("{", token))
@@ -2868,8 +2953,8 @@ static bool calculateOffsets(stackFrame_t *sf)
 }
 
 // The opening "(" has already been parsed
-static void processFunction(type_t *returnType,
-                            char   *identifier)
+static void parseFunction(type_t *returnType,
+                          char   *identifier)
 {
     function_t *newFunction  = {0};
     char      *token         = NULL;
@@ -2882,6 +2967,22 @@ static void processFunction(type_t *returnType,
         NULL == identifier)
     {
         INTERNAL_ERROR;
+        return;
+    }
+
+    if (0     == strcmp("_start", identifier) &&
+        (false == returnType->isVoid ||
+         0     != returnType->pointerDepth))
+    {
+        printError("_start must have void return type");
+        drainToEndOfParenthasis(true);
+        token = getNextTokenCheckingForLineChange();
+        if (NULL != token &&
+            0 == strcmp("{", token))
+        {
+            drainToEndOfBlock(true);
+        }
+        free(token);
         return;
     }
 
@@ -3002,6 +3103,22 @@ static void processFunction(type_t *returnType,
         }
     }
 
+    if (0    == strcmp("_start", identifier) &&
+        NULL != newFunction->parameterNames.first)
+    {
+        printError("_start cannot have any arguments");
+        freeFunctionContents(newFunction);
+        free(newFunction);
+        token = getNextTokenCheckingForLineChange();
+        if (NULL != token &&
+            0 == strcmp("{", token))
+        {
+            drainToEndOfBlock(true);
+        }
+        free(token);
+        return;
+    }
+
     if (NULL != token)
     {
         free(token);
@@ -3057,6 +3174,12 @@ static void processFunction(type_t *returnType,
     }
 
     free(token);
+
+    if (0 == strcmp("_start", identifier) &&
+        0 != newFunction->definition.maxStackSize)
+    {
+        printError("_start cannot have any stack variables");
+    }
 }
 
 static bool intake()
@@ -3107,7 +3230,7 @@ static bool intake()
                 if (0 == strcmp("(", token))
                 {
                     // function declaration/definition
-                    processFunction(foundType, ident);
+                    parseFunction(foundType, ident);
                     break;
                 }
 
@@ -3498,6 +3621,18 @@ static void DEBUG_printStackFrame(int padding, stackFrame_t *sf)
                         printf(":\n");
                         DEBUG_printStackFrame(padding + 4, &i->consequence);
                     }
+                    break;
+                }
+                case assembly_e:
+                {
+                    assembly_t *dsb = vc->data;
+
+                    printf("__dsb__:\n(\n");
+                    for (strll_t *s = dsb->first; NULL != s; s = s->next)
+                    {
+                        printf("%s", s->str);
+                    }
+                    printf(")\n");
                     break;
                 }
                 default:

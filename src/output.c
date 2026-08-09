@@ -595,6 +595,21 @@ static bool outputIf(if_t *ifData)
     return true;
 }
 
+static bool outputAssembly(assembly_t *dsb)
+{
+    if (NULL == dsb)
+    {
+        return false;
+    }
+
+    for (strll_t *s = dsb->first; NULL != s; s = s->next)
+    {
+        fprintf(outputFile, "%s", s->str);
+    }
+
+    return true;
+}
+
 static bool outputStackFrame(stackFrame_t *sf)
 {
     if (NULL == sf)
@@ -633,6 +648,13 @@ static bool outputStackFrame(stackFrame_t *sf)
             case if_e:
             {
                 if (false == outputIf(vc->data))
+                {
+                    return false;
+                }
+            }
+            case assembly_e:
+            {
+                if (false == outputAssembly(vc->data))
                 {
                     return false;
                 }
@@ -685,16 +707,22 @@ static bool outputFunctions()
         fprintf(outputFile, "    .export %s\n", f->identifier);
 
         // Declare required symbols
-        //fprintf(outputFile, "    .requires __STACK_OVERFLOW__\n"); // TODO add common code segment
+        if (0 != strcmp(f->identifier, "_start"))
+        {
+            //fprintf(outputFile, "    .requires __STACK_OVERFLOW__\n"); // TODO add common code segment
+        }
         for (strll_t *s = f->requiredSymbols.first; NULL != s; s = s->next)
         {
             fprintf(outputFile, "    .requires %s\n", s->str);
         }
 
         // Check for stack overflow
-        PUT(DSB_ADD);  fprintf(outputFile, "G0 SP %u\n", f->definition.maxStackSize);
-        PUT(DSB_COMP); fprintf(outputFile, "G0 0xFFC0\n");
-        //PUT(DSB_BRHS); fprintf(outputFile, "__STACK_OVERFLOW__\n"); // TODO add common code segment
+        if (0 != strcmp(f->identifier, "_start"))
+        {
+            PUT(DSB_ADD);  fprintf(outputFile, "G0 SP %u\n", f->definition.maxStackSize);
+            PUT(DSB_COMP); fprintf(outputFile, "G0 0xFFC0\n");
+            //PUT(DSB_BRHS); fprintf(outputFile, "__STACK_OVERFLOW__\n"); // TODO add common code segment
+        }
 
         if (false == outputStackFrame(&f->definition))
         {
@@ -703,7 +731,16 @@ static bool outputFunctions()
 
         // Return routine
         fprintf(outputFile, "    :ret\n");
-        PUT(DSB_MOVE); fprintf(outputFile, "SP OB\n");
+        if (0 == strcmp(f->identifier, "_start"))
+        {
+            // Intentionally cause a stack underflow, we should
+            // exit via syscall
+            PUT(DSB_MOVE); fprintf(outputFile, "SP 0\n");
+        }
+        else
+        {
+            PUT(DSB_MOVE); fprintf(outputFile, "SP OB\n");
+        }
         PUT(DSB_RETURN);
     }
     return true;

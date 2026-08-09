@@ -1,3 +1,3 @@
 #!/usr/bin/bash
 
-./make.sh && cd test && ../dcc src/* -I include/*
+./make.sh && cd test && ../dcc src/* -I include/* -k

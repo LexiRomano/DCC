@@ -544,6 +544,96 @@ bool stringWrappedWith(char *str, char c)
     return stringStartsWith(str, c) && stringEndsWith(str, c);
 }
 
+bool stripQuotes(char *str)
+{
+    if (NULL == str ||
+        strlen(str) < 2)
+    {
+        return false;
+    }
+
+    // Take off last quote
+    str[strlen(str) - 1] = '\0';
+
+    // Take off the first quote and shift down
+    for (char *p = str; '\0' != *p; p++)
+    {
+        *p = p[1];
+    }
+
+    return true;
+}
+
+bool proccessEscapeCharacters(char *str)
+{
+    char next = 0;
+
+    if (NULL == str)
+    {
+        return false;
+    }
+
+    for (char *p = str; '\0' != *p; p++)
+    {
+        if ('\\' != *p)
+        {
+            continue;
+        }
+
+        next = p[1];
+
+        switch (next)
+        {
+            case '\\':
+            {
+                break;
+            }
+            case 'n':
+            {
+                *p = '\n';
+                break;
+            }
+            case 't':
+            {
+                *p = '\t';
+                break;
+            }
+            case 'e':
+            {
+                *p = '\e';
+                break;
+            }
+            case 'r':
+            {
+                *p = '\r';
+                break;
+            }
+            case '\'':
+            {
+                *p = '\'';
+                break;
+            }
+            case '"':
+            {
+                *p = '"';
+                break;
+            }
+            default:
+            {
+                return false;
+            }
+        }
+
+        // Shift down other characters
+        for (char *p2 = p+1; '\0' != *p2; p2++)
+        {
+            *p2 = p2[1];
+        }
+    }
+
+    return true;
+}
+
 definition_t *addDefinition(definitionList_t *list)
 {
     if (NULL == list)
@@ -1151,6 +1241,11 @@ void freeVoidListContents(voidList_t *vl)
                     {
                         freeExpression(&i->condition);
                     }
+                    break;
+                }
+                case assembly_e:
+                {
+                    freeStringLinkedListContents(cur->data);
                     break;
                 }
                 default:
