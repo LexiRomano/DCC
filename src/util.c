@@ -1174,6 +1174,29 @@ void freeVoidListContents(voidList_t *vl)
     vl->lastItem  = NULL;
 }
 
+void freeFunctionCallContents(functionCall_t *fc)
+{
+    expression_t *cur = NULL;
+    expression_t *nxt = NULL;
+
+    if (NULL == fc ||
+        NULL == fc->firstParam)
+    {
+        return;
+    }
+
+    cur = fc->firstParam;
+
+    while (cur != NULL)
+    {
+        nxt = cur->next;
+
+        freeExpression(&cur);
+
+        cur = nxt;
+    }
+}
+
 void freeExpression(expression_t **exp)
 {
     if (NULL == exp ||
@@ -1217,7 +1240,7 @@ void freeExpression(expression_t **exp)
         }
         case et_functionCall_e:
         {
-            INTERNAL_ERROR;
+            freeFunctionCallContents(&(*exp)->contents.functionCall);
             break;
         }
     }
@@ -1281,4 +1304,24 @@ bool isTypeSigned(type_t *t)
     }
 
     return true;
+}
+
+function_t *findFunction(functionList_t *fl, char *ident)
+{
+    if (NULL == fl ||
+        NULL == fl->first ||
+        NULL == ident)
+    {
+        return NULL;
+    }
+
+    for (function_t *f = fl->first; NULL != f; f = f->next)
+    {
+        if (0 == strcmp(f->identifier, ident))
+        {
+            return f;
+        }
+    }
+
+    return NULL;
 }

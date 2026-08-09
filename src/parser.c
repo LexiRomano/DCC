@@ -662,7 +662,6 @@ static bool evaluateType(expression_t *exp)
 
     resType = &exp->resultingType;
 
-
     switch (exp->expressionType)
     {
         case et_variable_e:
@@ -675,6 +674,7 @@ static bool evaluateType(expression_t *exp)
             resType->isVoid       = false;
             resType->isRaw        = true;
             resType->type.rawType = int_e;
+            resType->size         = 4;
             resType->pointerDepth = 0;
             return true;
         }
@@ -683,6 +683,7 @@ static bool evaluateType(expression_t *exp)
             resType->isVoid       = false;
             resType->isRaw        = true;
             resType->type.rawType = char_e;
+            resType->size         = 4;
             resType->pointerDepth = 1;
             return true;
         }
@@ -774,6 +775,7 @@ static bool evaluateType(expression_t *exp)
                         resType->isVoid       = false;
                         resType->isRaw        = true;
                         resType->type.rawType = int_e;
+                        resType->size         = 4;
                         resType->pointerDepth = 0;
                         return true;
                     }
@@ -827,6 +829,7 @@ static bool evaluateType(expression_t *exp)
                         resType->isVoid       = false;
                         resType->isRaw        = true;
                         resType->type.rawType = int_e;
+                        resType->size         = 4;
                         resType->pointerDepth = 0;
                         return true;
                     }
@@ -849,6 +852,7 @@ static bool evaluateType(expression_t *exp)
                         resType->isVoid       = false;
                         resType->isRaw        = true;
                         resType->type.rawType = int_e;
+                        resType->size         = 4;
                         resType->pointerDepth = 0;
                         return true;
                     }
@@ -872,6 +876,7 @@ static bool evaluateType(expression_t *exp)
                         resType->isVoid       = false;
                         resType->isRaw        = true;
                         resType->type.rawType = int_e;
+                        resType->size         = 4;
                         resType->pointerDepth = 0;
                         return true;
                     }
@@ -892,6 +897,7 @@ static bool evaluateType(expression_t *exp)
                         resType->isVoid       = false;
                         resType->isRaw        = true;
                         resType->type.rawType = int_e;
+                        resType->size         = 4;
                         resType->pointerDepth = 0;
                         return true;
                     }
@@ -904,6 +910,7 @@ static bool evaluateType(expression_t *exp)
                         resType->isVoid       = false;
                         resType->isRaw        = true;
                         resType->type.rawType = int_e;
+                        resType->size         = 4;
                         resType->pointerDepth = 0;
                         return true;
                     }
@@ -929,6 +936,7 @@ static bool evaluateType(expression_t *exp)
                         resType->isVoid       = false;
                         resType->isRaw        = true;
                         resType->type.rawType = int_e;
+                        resType->size         = 4;
                         resType->pointerDepth = 0;
                         return true;
                     }
@@ -957,6 +965,7 @@ static bool evaluateType(expression_t *exp)
                         resType->isVoid       = false;
                         resType->isRaw        = true;
                         resType->type.rawType = int_e;
+                        resType->size         = 4;
                         resType->pointerDepth = 0;
                         return true;
                     }
@@ -994,7 +1003,7 @@ static bool evaluateType(expression_t *exp)
         }
         case et_functionCall_e:
         {
-            printError("function call type evaluation not supported");
+            memcpy(resType, &exp->contents.functionCall.function->returnType, sizeof(*resType));
             return true;
         }
         default:
@@ -1281,10 +1290,12 @@ static bool parseExpressionInternal(stackFrame_t  *stackFrame,
                                     expression_t  *prevExp)
 {
     char          *token    = NULL;
+    char          *token2   = NULL;
     variable_t    *tmpVar   = NULL;
     expression_t  *newExp   = NULL;
     expression_t  *newExp2  = NULL;
     expression_t **insert   = NULL;
+    function_t    *tmpFunc  = NULL;
     unsigned int   literal  = 0;
     strll_t       *tmpStrll = NULL;
 
@@ -1305,7 +1316,8 @@ static bool parseExpressionInternal(stackFrame_t  *stackFrame,
     }
 
     if (0 == strcmp(";", token) ||
-        0 == strcmp(")", token))
+        0 == strcmp(")", token) ||
+        0 == strcmp(",", token))
     {
         rewindTokenParse();
         free(token);
@@ -1369,7 +1381,154 @@ static bool parseExpressionInternal(stackFrame_t  *stackFrame,
         }
 
         goto checkForEnd;
+    }
 
+    if (isIdentifier(token) &&
+        NULL != (tmpFunc = findFunction(functions, token)))
+    {
+        token2 = peekNextTokenFromFile(inputFile);
+
+        if (NULL == token2 ||
+            0    != strcmp(token2, "("))
+        {
+            printErrorArgs("expected \"(\" after function identifier \"%s\"", token);
+            free(token2);
+            free(token);
+            return false;
+        }
+        free(token2);
+
+        if (NULL != prevExp &&
+            false == getEmptyExpression(prevExp, &insert))
+        {
+            // Never got inserted into the tree, need to free here
+            // This would be dealing with function pointers... let's not x_X
+            drainToEndOfParenthasis(true);
+            printErrorArgs("function call to \"%s\" cannot precede a complete statement", token);
+            return false;
+        }
+
+        free(token);
+        // Drain the '('
+        token = getNextTokenCheckingForLineChange();
+        free(token);
+
+        // Special case to handle no-argument functions since we
+        // never get into the loop
+
+        if (NULL == tmpFunc->parameterTypes.first)
+        {
+            token = getNextTokenCheckingForLineChange();
+            if (0 != strcmp(")", token))
+            {
+                free(token);
+                printErrorArgs("too many arguments for call to \"%s\"", tmpFunc->identifier);
+                drainToEndOfParenthasis(true);
+                return false;
+            }
+            free(token);
+        }
+
+        newExp = calloc(1, sizeof(*newExp));
+        newExp->expressionType = et_functionCall_e;
+        newExp->contents.functionCall.function = tmpFunc;
+
+        int argNum = 0;
+        for (type_t *t = tmpFunc->parameterTypes.first; NULL != t; t = t->next)
+        {
+            argNum++;
+            if (NULL == newExp->contents.functionCall.firstParam)
+            {
+                if (false == parseExpression(stackFrame, &newExp->contents.functionCall.firstParam))
+                {
+                    freeExpression(&newExp);
+                    drainToEndOfParenthasis(true);
+                    return false;
+                }
+
+                newExp->contents.functionCall.lastParam = newExp->contents.functionCall.firstParam;
+            }
+            else
+            {
+                if (false == parseExpression(stackFrame, &newExp->contents.functionCall.lastParam->next))
+                {
+                    freeExpression(&newExp);
+                    drainToEndOfParenthasis(true);
+                    return false;
+                }
+
+                newExp->contents.functionCall.lastParam = newExp->contents.functionCall.lastParam->next;
+            }
+
+            if (NULL == newExp->contents.functionCall.lastParam)
+            {
+                printError("expected expression");
+                freeExpression(&newExp);
+                drainToEndOfParenthasis(true);
+                return false;
+            }
+
+            if (false == areTypesSimilar(t, &newExp->contents.functionCall.lastParam->resultingType))
+            {
+                token  = getTypeString(t);
+                token2 = getTypeString(&newExp->contents.functionCall.lastParam->resultingType);
+                printErrorArgs("expected '%s for argument %d of \"%s\" (got '%s')",
+                               token, argNum, tmpFunc->identifier, token2);
+                free(token);
+                free(token2);
+                freeExpression(&newExp);
+                drainToEndOfParenthasis(true);
+                return false;
+            }
+
+            token = getNextTokenCheckingForLineChange();
+            
+            if (NULL == token ||
+                (0 != strcmp(",", token) &&
+                 0 != strcmp(")", token)))
+            {
+                if (NULL != token)
+                {
+                    free(token);
+                }
+                printError("expected \",\" or \")\"");
+                freeExpression(&newExp);
+                drainToEndOfParenthasis(true);
+                return false;
+            }
+
+            if (0    == strcmp(",", token) &&
+                NULL == t->next)
+            {
+                free(token);
+                printErrorArgs("too many arguments for call to \"%s\"", tmpFunc->identifier);
+                freeExpression(&newExp);
+                drainToEndOfParenthasis(true);
+                return false;
+            }
+
+            if (0 == strcmp(")", token) &&
+                NULL != t->next)
+            {
+                free(token);
+                printErrorArgs("not enough arguments for call to \"%s\"", tmpFunc->identifier);
+                freeExpression(&newExp);
+                return false;
+            }
+        }
+
+        if (NULL == insert)
+        {
+            // First statement
+            *root = newExp;
+        }
+        else
+        {
+            *insert        = newExp;
+            newExp->parent = prevExp;
+        }
+
+        goto checkForEnd;
     }
 
     // Special handling required for certain operators before the generic loop
@@ -1714,7 +1873,8 @@ static bool parseExpressionInternal(stackFrame_t  *stackFrame,
     token = peekNextTokenFromFile(inputFile);
 
     if (0 == strcmp(";", token) ||
-        0 == strcmp(")", token))
+        0 == strcmp(")", token) ||
+        0 == strcmp(",", token))
     {
         free(token);
         return true;
@@ -1731,8 +1891,7 @@ static bool deSugarAndSimplify(expression_t *expression)
 
     if (NULL == expression)
     {
-        INTERNAL_ERROR;
-        return false;
+        return true;
     }
 
     switch (expression->expressionType)
@@ -1740,7 +1899,6 @@ static bool deSugarAndSimplify(expression_t *expression)
         case et_variable_e:
         case et_literal_e:
         case et_stringLiteral_e:
-        case et_functionCall_e:
         {
             break;
         }
@@ -1771,6 +1929,17 @@ static bool deSugarAndSimplify(expression_t *expression)
         }
         case et_trinary_e:
         {
+            break;
+        }
+        case et_functionCall_e:
+        {
+            for (expression_t *e = expression->contents.functionCall.firstParam; NULL != e; e = e->next)
+            {
+                if (false == deSugarAndSimplify(e))
+                {
+                    return false;
+                }
+            }
             break;
         }
     }
@@ -2686,7 +2855,7 @@ static bool calculateOffsets(stackFrame_t *sf)
 static void processFunction(type_t *returnType,
                             char   *identifier)
 {
-    function_t newFunction   = {0};
+    function_t *newFunction  = {0};
     char      *token         = NULL;
     bool       findArguments = false;
     type_t    *foundType     = NULL;
@@ -2725,6 +2894,8 @@ static void processFunction(type_t *returnType,
         rewindTokenParse();
     }
 
+    newFunction = calloc(1, sizeof(*newFunction));
+
     // Getting the arguments
     while (findArguments)
     {
@@ -2736,31 +2907,33 @@ static void processFunction(type_t *returnType,
 
         if (false == getTypeAndIdent(&foundType, &foundIdent))
         {
-            freeFunctionContents(&newFunction);
+            freeFunctionContents(newFunction);
+            free(newFunction);
             return;
         }
 
-        tmpStrll = addStringLinkedList(&(newFunction.parameterNames));
+        tmpStrll = addStringLinkedList(&(newFunction->parameterNames));
 
         if (NULL == tmpStrll)
         {
-            INTERNAL_ERROR;
-            freeFunctionContents(&newFunction);
+            ALLOC_ERROR;
+            freeFunctionContents(newFunction);
+            free(newFunction);
             return;
         }
 
         tmpStrll->str = foundIdent;
         foundIdent    = NULL;
 
-        if (NULL == newFunction.parameterTypes.first)
+        if (NULL == newFunction->parameterTypes.first)
         {
-            newFunction.parameterTypes.first = foundType;
-            newFunction.parameterTypes.last  = foundType;
+            newFunction->parameterTypes.first = foundType;
+            newFunction->parameterTypes.last  = foundType;
         }
         else
         {
-            newFunction.parameterTypes.last->next = foundType;
-            newFunction.parameterTypes.last       = foundType;
+            newFunction->parameterTypes.last->next = foundType;
+            newFunction->parameterTypes.last       = foundType;
         }
 
         foundType = NULL;
@@ -2771,7 +2944,8 @@ static void processFunction(type_t *returnType,
         if (NULL == token)
         {
             printError("incomplete function declaration");
-            freeFunctionContents(&newFunction);
+            freeFunctionContents(newFunction);
+            free(newFunction);
             return;
         }
 
@@ -2785,7 +2959,8 @@ static void processFunction(type_t *returnType,
         }
 
         printError("expected \",\" or \")\"");
-        freeFunctionContents(&newFunction);
+        freeFunctionContents(newFunction);
+        free(newFunction);
         while (true)
         {
             if (NULL != token)
@@ -2826,38 +3001,46 @@ static void processFunction(type_t *returnType,
         return;
     }
 
-    if (0 == strcmp("{", token))
+    memcpy(&newFunction->returnType, returnType, sizeof(*returnType));
+    newFunction->identifier = strdup(identifier);
+
+    if (NULL == newFunction->identifier)
     {
-        currentFunction = &newFunction;
-        
-        if (false == addParamsToStackFrame(&newFunction) ||
-            false == processStackFrame(&(newFunction.definition)) ||
-            false == calculateOffsets(&newFunction.definition))
-        {
-            freeFunctionContents(&newFunction);
-            currentFunction = NULL;
-            return;
-        }
-        newFunction.isDefined = true;
-        currentFunction = NULL;
+        ALLOC_ERROR;
+        freeFunctionContents(newFunction);
+        free(newFunction);
+        return;
     }
-
-    free(token);
-
-
-    memcpy(&newFunction.returnType, returnType, sizeof(*returnType));
-    newFunction.identifier = strcpy(calloc(strlen(identifier) + 1, sizeof(char)), identifier);
 
     if (NULL == functions->first)
     {
-        functions->first = memcpy(calloc(1, sizeof(newFunction)), &newFunction, sizeof(newFunction));
+        functions->first = newFunction;
         functions->last  = functions->first;
     }
     else
     {
-        functions->last->next = memcpy(calloc(1, sizeof(newFunction)), &newFunction, sizeof(newFunction));
+        functions->last->next = newFunction;
         functions->last       = functions->last->next;
     }
+
+    if (0 == strcmp("{", token))
+    {
+        currentFunction = newFunction;
+        
+        if (false == addParamsToStackFrame(newFunction) ||
+            false == processStackFrame(&newFunction->definition) ||
+            false == calculateOffsets(&newFunction->definition))
+        {
+            freeFunctionContents(newFunction);
+            free(newFunction);
+            currentFunction = NULL;
+            return;
+        }
+        newFunction->isDefined = true;
+        currentFunction = NULL;
+    }
+
+    free(token);
 }
 
 static bool intake()
@@ -3187,7 +3370,16 @@ static void DEBUG_printExpression(expression_t *exp)
         }
         case et_functionCall_e:
         {
-            printf("FUNCTION CALL NOT IMPLEMENTED");
+            printf("%s(", exp->contents.functionCall.function->identifier);
+            for (expression_t *e = exp->contents.functionCall.firstParam; NULL != e; e = e->next)
+            {
+                DEBUG_printExpression(e);
+                if (NULL != e->next)
+                {
+                    printf(", ");
+                }
+            }
+            printf(")");
             return;
         }
         default:

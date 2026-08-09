@@ -78,4 +78,8 @@ void freeExpression(expression_t **exp);
 
 void freeParsedDataContents(parsedData_t *p);
 
+function_t *findFunction(functionList_t *fl, char *ident);
+
+void freeFunctionCallContents(functionCall_t *fc);
+
 #endif //__DCC_H__

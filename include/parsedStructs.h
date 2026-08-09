@@ -321,6 +321,8 @@ typedef struct expression_t
         trinaryOperator_t trinary;
         functionCall_t    functionCall;
     } contents;
+
+    struct expression_t *next;
 } expression_t;
 
 

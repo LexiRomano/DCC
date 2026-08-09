@@ -445,8 +445,80 @@ static bool outputExpressionInternal(expression_t *exp, uint8_t baseReg, bool fo
         }
         case et_functionCall_e:
         {
-            fprintf(outputFile, "    //TODO: function call\n");
-            INTERNAL_ERROR;
+            int           paramIndex     = 0;
+            int           totalParamSize = 0;
+            expression_t *e              = NULL;
+
+            for (e = exp->contents.functionCall.firstParam; NULL != e; e = e->next)
+            {
+                if (false == outputExpressionInternal(e, baseReg + paramIndex, false))
+                {
+                    return false;
+                }
+                paramIndex++;
+            }
+
+            // We can't directly save the value of OB since that would not make
+            // the code relocatable. Instead we push the difference, calculated
+            // in OC
+            PUT(DSB_SUB);  fprintf(outputFile, "OC OB OA\n");
+            PUT(DSB_PUSH); fprintf(outputFile, "OC\n");
+
+            // Align OC to the base of the next function frame
+            PUT(DSB_ADD);  fprintf(outputFile, "OC SB SP\n");
+            PUT(DSB_ADD);  fprintf(outputFile, "OC OC 4\n");
+
+            e = exp->contents.functionCall.firstParam;
+            for (int pi = 0; pi < paramIndex; pi++)
+            {
+                if (NULL == e)
+                {
+                    INTERNAL_ERROR;
+                    return false;
+                }
+
+                switch (e->resultingType.size)
+                {
+                    case 1:
+                    {
+                        PUT(DSB_STOR_C_OC);
+                        break;
+                    }
+                    case 2:
+                    {
+                        PUT(DSB_STOR_H_OC);
+                        break;
+                    }
+                    case 4:
+                    {
+                        PUT(DSB_STOR_OC);
+                        break;
+                    }
+                    default:
+                    {
+                        INTERNAL_ERROR;
+                        printf("%d\n", e->resultingType.size);
+                        return false;
+                    }
+                }
+                fprintf(outputFile, "G%hhu %d\n", baseReg + pi, totalParamSize);
+                totalParamSize += e->resultingType.size;
+                e = e->next;
+            }
+
+            // Align OB
+            PUT(DSB_MOVE); fprintf(outputFile, "OB OC\n");
+
+            // Branch
+            PUT(DSB_BRAL_P); fprintf(outputFile, "%s\n", exp->contents.functionCall.function->identifier);
+
+            // Re-calculate OC since we might have lost it and we can't store it
+            // before the function call
+            PUT(DSB_MOVE); fprintf(outputFile, "OC OB\n");
+
+            // Re-align OB (we pushed the diff between OB and OA, so add OA back)
+            PUT(DSB_POP); fprintf(outputFile, "OB\n");
+            PUT(DSB_ADD); fprintf(outputFile, "OB OB OA\n");
             break;
         }
     }

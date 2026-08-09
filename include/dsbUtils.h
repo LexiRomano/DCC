@@ -11,6 +11,9 @@
 #define DSB_STOR_OA   "    STOR-OA       "
 #define DSB_STOR_H_OA "    STOR-W2S0-OA  "
 #define DSB_STOR_C_OA "    STOR-W1S0-OA  "
+#define DSB_STOR_OC   "    STOR-OC       "
+#define DSB_STOR_H_OC "    STOR-W2S0-OC  "
+#define DSB_STOR_C_OC "    STOR-W1S0-OC  "
 #define DSB_ADD       "    ADD           "
 #define DSB_SUB       "    SUB           "
 #define DSB_BSLT      "    BSLT          "
@@ -22,6 +25,7 @@
 #define DSB_NOT       "    NOT           "
 #define DSB_COMP      "    COMP          "
 #define DSB_BRAL      "    BRAL          "
+#define DSB_BRAL_P    "    BRAL-P        "
 #define DSB_BREQ      "    BREQ          "
 #define DSB_BRNE      "    BRNE          "
 #define DSB_BRHI      "    BRHI          "
@@ -33,6 +37,8 @@
 #define DSB_BRLE      "    BRLE          "
 #define DSB_BRLT      "    BRLT          "
 #define DSB_BRMI      "    BRMI          "
+#define DSB_PUSH      "    PUSH          "
+#define DSB_POP       "    POP           "
 #define DSB_RETURN    "    RETURN\n"
 
 #endif //__DSB_UTILS_H__
