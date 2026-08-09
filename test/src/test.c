@@ -17,7 +17,7 @@ void myFunc(short int param1, unsigned char param2, uint8_t param3)
 
     anotherFunc(a + b, b);
 
-    myFunc(param1, param2, param3);
+    //myFunc(param1, param2, param3);
 }
 
 uint8_t anotherOne;

@@ -21,8 +21,12 @@
 #define ERROR(file, line, buf, msg)           printf("%s:%d: error: " msg "\n  %d | %s", file, line, line, buf)
 #define ERROR_ARGS(file, line, buf, msg, ...) printf("%s:%d: error: " msg "\n  %d | %s", file, line, __VA_ARGS__, line, buf)
 
-#define TEMP_DIRECTORY "dTemp"
-#define GLOBALS_DSB_FILE "dTemp/__GLOBALS__.dsb"
+#define GLOBALS_SECTION_NAME "__GLOBALS__"
+
+#define TEMP_DIRECTORY   "dTemp"
+#define GLOBALS_DSB_FILE "dTemp/" GLOBALS_SECTION_NAME ".dsb"
+#define DFG_FILE         "dTemp/config.dfg"
+
 
 #define PREPRO_FILE_EXTENSION "di"
 #define DSB_FILE_EXTENSION    "dsb"
@@ -79,7 +83,5 @@ void freeExpression(expression_t **exp);
 void freeParsedDataContents(parsedData_t *p);
 
 function_t *findFunction(functionList_t *fl, char *ident);
-
-void freeFunctionCallContents(functionCall_t *fc);
 
 #endif //__DCC_H__

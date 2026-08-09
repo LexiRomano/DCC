@@ -173,6 +173,26 @@ static bool prepareGlobals()
     return true;
 }
 
+static bool prepareConfig()
+{
+    FILE *configFile = NULL;
+
+    configFile = fopen(DFG_FILE, "w");
+
+    if (NULL == configFile)
+    {
+        INTERNAL_ERROR;
+        return false;
+    }
+
+    fprintf(configFile, ".out out.bin\n");
+    fprintf(configFile, ".source %s\n", GLOBALS_DSB_FILE);
+
+    fclose(configFile);
+
+    return true;
+}
+
 int main(int argc, char *argv[])
 {
     int   rc               = 0;
@@ -189,7 +209,8 @@ int main(int argc, char *argv[])
     }
 
     if (false == createTmpDirectory() ||
-        false == prepareGlobals())
+        false == prepareGlobals() ||
+        false == prepareConfig())
     {
         success = false;
         goto fail;
@@ -219,6 +240,28 @@ int main(int argc, char *argv[])
             continue;
         }
     }
+
+    if (success)
+    {
+        FILE *configFile = fopen(DFG_FILE, "a");
+
+        if (NULL == configFile)
+        {
+            success = false;
+        }
+        else
+        {
+            fprintf(configFile, "%s\n", GLOBALS_SECTION_NAME);
+
+            fclose(configFile);
+        }
+    }
+
+    if (0 != system("dssembly -k " DFG_FILE))
+    {
+        success = false;
+    }
+
 
     if (false == keepTmp)
     {

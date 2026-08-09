@@ -1528,6 +1528,22 @@ static bool parseExpressionInternal(stackFrame_t  *stackFrame,
             newExp->parent = prevExp;
         }
 
+        if (NULL != currentFunction &&
+            currentFunction != tmpFunc)
+        {
+            tmpStrll = findStringLinkedList(&currentFunction->requiredSymbols, tmpFunc->identifier);
+            if (NULL == tmpStrll)
+            {
+                tmpStrll = addStringLinkedList(&currentFunction->requiredSymbols);
+                if (NULL == tmpStrll)
+                {
+                    ALLOC_ERROR;
+                    return false;
+                }
+                tmpStrll->str = strdup(tmpFunc->identifier);
+            }
+        }
+
         goto checkForEnd;
     }
 
