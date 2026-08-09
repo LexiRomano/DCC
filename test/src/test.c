@@ -7,13 +7,17 @@ short unsigned int emptyFunc();
 
 void myFunc(short int param1, unsigned char param2, uint8_t param3)
 {
-    char a;
-    char b;
+    int a;
+    int b;
 
-    if (a > b)
-    {
-
-    }
+    a >  b;
+    a >= b;
+    a == b;
+    a != b;
+    a <= b;
+    a <  b;
+    a && b;
+    a || b;
 }
 
 uint8_t anotherOne;

@@ -720,11 +720,7 @@ static bool evaluateType(expression_t *exp)
                         memcpy(resType, childType1, sizeof(*resType));
                         return true;
                     }
-                    typeStr1 = getTypeString(childType1);
-                    printErrorArgs("cannot apply \"%s\" operator to '%s'",
-                                   operatorTokens[exp->contents.unary.operation], typeStr1);
-                    free(typeStr1);
-                    return false;
+                    break;
                 }
                 case op_bitwiseNot_e:
                 case op_negative_e:
@@ -734,11 +730,7 @@ static bool evaluateType(expression_t *exp)
                         memcpy(resType, childType1, sizeof(*resType));
                         return true;
                     }
-                    typeStr1 = getTypeString(childType1);
-                    printErrorArgs("cannot apply \"%s\" operator to '%s'",
-                                   operatorTokens[exp->contents.unary.operation], typeStr1);
-                    free(typeStr1);
-                    return false;
+                    break;
                 }
                 case op_reference_e:
                 {
@@ -775,11 +767,29 @@ static bool evaluateType(expression_t *exp)
                     memcpy(resType, childType1, sizeof(*resType));
                     return true;
                 }
+                case op_logicalNot_e:
+                {
+                    if ((isTypeRaw(childType1) || isTypePointer(childType1)))
+                    {
+                        resType->isVoid       = false;
+                        resType->isRaw        = true;
+                        resType->type.rawType = int_e;
+                        resType->pointerDepth = 0;
+                        return true;
+                    }
+                    break;
+                }
                 default:
                 {
                     INTERNAL_ERROR;
                     return false;
                 }
+
+                typeStr1 = getTypeString(childType1);
+                printErrorArgs("cannot apply \"%s\" operator to '%s'",
+                                operatorTokens[exp->contents.unary.operation], typeStr1);
+                free(typeStr1);
+                return false;
             }
         }
         case et_binary_e:
@@ -873,6 +883,8 @@ static bool evaluateType(expression_t *exp)
                 case op_greaterEqual_e:
                 case op_lessEqual_e:
                 case op_lessThan_e:
+                case op_logicalAnd_e:
+                case op_logicalOr_e:
                 {
                     if ((isTypeRaw(childType1) || isTypePointer(childType1)) &&
                         (isTypeRaw(childType2) || isTypePointer(childType2)))

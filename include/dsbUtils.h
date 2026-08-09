@@ -14,6 +14,7 @@
 #define DSB_ADD       "    ADD           "
 #define DSB_SUB       "    SUB           "
 #define DSB_BSLT      "    BSLT          "
+#define DSB_BSLC      "    BSLC          "
 #define DSB_BSRT      "    BSRT          "
 #define DSB_AND       "    AND           "
 #define DSB_OR        "    OR            "

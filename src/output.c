@@ -146,6 +146,7 @@ static bool outputExpressionInternal(expression_t *exp, uint8_t baseReg, bool fo
         case et_stringLiteral_e:
         {
             fprintf(outputFile, "    //TODO string literal\n");
+            INTERNAL_ERROR;
             break;
         }
         case et_unary_e:
@@ -153,12 +154,20 @@ static bool outputExpressionInternal(expression_t *exp, uint8_t baseReg, bool fo
             switch (exp->contents.unary.operation)
             {
                 case op_bitwiseNot_e:
+                case op_logicalNot_e:
                 {
                     if (false == outputExpressionInternal(exp->contents.binary.operand1,
                                                           baseReg,
                                                           false))
                     {
                         return false;
+                    }
+
+                    if (op_logicalNot_e == exp->contents.unary.operation)
+                    {
+                        PUT(DSB_COMP); fprintf(outputFile, "G%hhu 1\n", baseReg);
+                        PUT(DSB_MOVE); fprintf(outputFile, "G%hhu 0\n", baseReg);
+                        PUT(DSB_BSLC); fprintf(outputFile, "G%hhu G%hhu 1\n", baseReg, baseReg);
                     }
 
                     PUT(DSB_NOT); fprintf(outputFile, "G%hhu G%hhu\n", baseReg, baseReg);
@@ -168,6 +177,7 @@ static bool outputExpressionInternal(expression_t *exp, uint8_t baseReg, bool fo
                 {
                     fprintf(outputFile, "    //TODO unary operation %d\n",
                             exp->contents.unary.operation);
+                    INTERNAL_ERROR;
                     break;
                 }
             }
@@ -363,10 +373,65 @@ static bool outputExpressionInternal(expression_t *exp, uint8_t baseReg, bool fo
 
                     break;
                 }
+                case op_logicalAnd_e:
+                case op_logicalOr_e:
+                {
+                    int statementId = 0;
+
+                    if (false == outputExpressionInternal(exp->contents.binary.operand1,
+                                                          baseReg,
+                                                          false))
+                    {
+                        return false;
+                    }
+
+                    statementId = ftell(outputFile);
+
+                    PUT(DSB_COMP); fprintf(outputFile, "G%hhu 0\n", baseReg);
+                    if (op_logicalAnd_e == exp->contents.binary.operation)
+                    {
+                        PUT(DSB_BREQ); fprintf(outputFile, "__andFail_%u__\n", statementId);
+                    }
+                    else
+                    {
+                        PUT(DSB_BRNE); fprintf(outputFile, "__orSuccess_%u__\n", statementId);
+                    }
+                    
+
+                    if (false == outputExpressionInternal(exp->contents.binary.operand2,
+                                                          baseReg,
+                                                          false))
+                    {
+                        return false;
+                    }
+
+                    PUT(DSB_COMP); fprintf(outputFile, "G%hhu 0\n", baseReg);
+                    if (op_logicalAnd_e == exp->contents.binary.operation)
+                    {
+                        PUT(DSB_BREQ); fprintf(outputFile, "__andFail_%u__\n", statementId);
+                        PUT(DSB_MOVE); fprintf(outputFile, "G%hhu 1\n", baseReg);
+                        PUT(DSB_BRAL); fprintf(outputFile, "__andSucceded_%u__\n", statementId);
+                                       fprintf(outputFile, "    :__andFail_%u__\n", statementId);
+                        PUT(DSB_MOVE); fprintf(outputFile, "G%hhu 0\n", baseReg);
+                                       fprintf(outputFile, "    :__andSucceded_%u__\n", statementId);
+                    }
+                    else
+                    {
+                        PUT(DSB_BRNE); fprintf(outputFile, "__orSuccess_%u__\n", statementId);
+                        PUT(DSB_MOVE); fprintf(outputFile, "G%hhu 0\n", baseReg);
+                        PUT(DSB_BRAL); fprintf(outputFile, "__orFailed_%u__\n", statementId);
+                                       fprintf(outputFile, "    :__orSuccess_%u__\n", statementId);
+                        PUT(DSB_MOVE); fprintf(outputFile, "G%hhu 1\n", baseReg);
+                                       fprintf(outputFile, "    :__orFailed_%u__\n", statementId);
+                    }
+
+                    break;
+                }
                 default:
                 {
                     fprintf(outputFile, "    //TODO binary operation %d\n",
                             exp->contents.binary.operation);
+                    INTERNAL_ERROR;
                     break;
                 }
             }
@@ -375,11 +440,13 @@ static bool outputExpressionInternal(expression_t *exp, uint8_t baseReg, bool fo
         case et_trinary_e:
         {
             fprintf(outputFile, "    //TODO trinary\n");
+            INTERNAL_ERROR;
             break;
         }
         case et_functionCall_e:
         {
             fprintf(outputFile, "    //TODO: function call\n");
+            INTERNAL_ERROR;
             break;
         }
     }
