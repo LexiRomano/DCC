@@ -2,18 +2,21 @@
 
 static stringLinkedList_t src     = {0};
 static char             **inc     = NULL;
-static bool               keepTmp = false;         
+static bool               keepTmp = false;
+static bool               objOut  = false;
 
-static stringLinkedList_t configSource  = {0};
-static stringLinkedList_t configObject  = {0};
-static stringLinkedList_t configSection = {0};
+static stringLinkedList_t configSource   = {0};
+static stringLinkedList_t configObject   = {0};
+static stringLinkedList_t configSection  = {0};
+static bool               startIsDefined = false;
 
 static void printHelp()
 {
-    printf("Usage: dcc file... [options]\n");
+    printf("Usage: dcc file ... [options]\n");
     printf("Options:\n");
     printf("  --help         Displays this information\n");
     printf("  -I             All following files are included instead of compiled\n");
+    printf("  -O             Output an object file\n");
     printf("  -k             Keep all temporary files\n");
 }
 
@@ -64,6 +67,10 @@ static int parseArgs(int argc, char *argv[])
             {
                 keepTmp = true;
             }
+            else if (0 == strcmp(argv[i], "-O"))
+            {
+                objOut = true;
+            }
             else
             {
                 printf("Unknown flag \"%s\"\n", argv[i]);
@@ -107,6 +114,14 @@ static int parseArgs(int argc, char *argv[])
                                    argv[i]);
         }
 
+    }
+
+    if (objOut && src.count > 1)
+    {
+        printf("Error: can only output object files for one source file at a time\n");
+        freeStringLinkedListContents(&src);
+        freeStringLinkedListContents(&includes);
+        return -1;
     }
 
     inc = calloc(includes.count + 1, sizeof(char*));
@@ -217,18 +232,28 @@ static bool prepareConfig()
 
     fprintf(configFile, ".source %s\n", GLOBALS_DSB_FILE);
 
+    if (false == startIsDefined)
+    {
+        fprintf(configFile, ".object " STD_OBJECTS_PATH "/__std_start__.dob\n");
+    }
+    fprintf(configFile, ".object " STD_OBJECTS_PATH "/__std_core__.dob\n");
+
     for (strll_t *s = configObject.first; NULL != s; s = s->next)
     {
         fprintf(configFile, ".object %s\n", s->str);
     }
 
-    fprintf(configFile, "\n_start\n");
+    if (false == startIsDefined)
+    {
+        fprintf(configFile, "\n_start\n");
+    }
 
     for (strll_t *s = configSection.first; NULL != s; s = s->next)
     {
         fprintf(configFile, "%s\n", s->str);
     }
 
+    fprintf(configFile, "__std_core__\n");
     fprintf(configFile, "%s\n", GLOBALS_SECTION_NAME);
 
     fclose(configFile);
@@ -265,6 +290,31 @@ static bool addToSourceInternal(stringLinkedList_t *strll, char *str)
     return true;
 }
 
+static bool copyObjectFileOut()
+{
+    char *fileName = NULL;
+    char  buf[256] = {0};
+
+    if (NULL == src.first ||
+        false == isolateFileName(src.first->str, &fileName))
+    {
+        INTERNAL_ERROR;
+        return false;
+    }
+
+    snprintf(buf, sizeof(buf), "cp %s/%s.%s %s.%s", TEMP_DIRECTORY, fileName, DOB_FILE_EXTENSION,
+                fileName, DOB_FILE_EXTENSION);
+
+    free(fileName);
+
+    if (0 != system(buf))
+    {
+        return false;
+    }
+
+    return true;
+}
+
 bool addSourceToConfig(char *src)
 {
     return addToSourceInternal(&configSource, src);
@@ -278,6 +328,11 @@ bool addObjectToConfig(char *obj)
 bool addSectionToConfig(char *sec)
 {
     return addToSourceInternal(&configSection, sec);
+}
+
+void startDefined()
+{
+    startIsDefined = true;
 }
 
 int main(int argc, char *argv[])
@@ -337,10 +392,21 @@ int main(int argc, char *argv[])
             goto fail;
         }
         
-        if (0 != system("dssembly -k " DFG_FILE))
+        if (objOut)
         {
-            remove(OUTPUT_FILE_NAME);
-            success = false;
+            if (0     != system("dssembly -o " DFG_FILE) ||
+                false == copyObjectFileOut())
+            {
+                success = false;
+            }
+        }
+        else
+        {
+            if (0 != system("dssembly -k " DFG_FILE))
+            {
+                remove(OUTPUT_FILE_NAME);
+                success = false;
+            }
         }
     }
         

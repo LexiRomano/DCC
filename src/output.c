@@ -699,7 +699,7 @@ static bool outputFunctions()
             {
                 return false;
             }
-            //fprintf(outputFile, "    .requires __STACK_OVERFLOW__\n"); // TODO add common code segment
+            fprintf(outputFile, "    .requires __STACK_OVERFLOW__\n");
         }
         for (strll_t *s = f->requiredSymbols.first; NULL != s; s = s->next)
         {
@@ -711,7 +711,7 @@ static bool outputFunctions()
         {
             PUT(DSB_ADD);  fprintf(outputFile, "G0 SP %u\n", f->definition.maxStackSize);
             PUT(DSB_COMP); fprintf(outputFile, "G0 0xFFC0\n");
-            //PUT(DSB_BRHS); fprintf(outputFile, "__STACK_OVERFLOW__\n"); // TODO add common code segment
+            PUT(DSB_BRHS); fprintf(outputFile, "__STACK_OVERFLOW__\n");
         }
 
         if (false == outputStackFrame(&f->definition))

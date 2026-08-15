@@ -31,8 +31,13 @@
 
 #define PREPRO_FILE_EXTENSION "di"
 #define DSB_FILE_EXTENSION    "dsb"
+#define DOB_FILE_EXTENSION    "dob"
 #define STD_INCLUDE_PATH "/usr/lib/dcc/include"
 #define LIB_INCLUDE_PATH "/usr/lib/dlib/include"
+
+#define STD_OBJECTS_PATH "/usr/lib/dcc/objects"
+#define LIB_OBJECTS_PATH "/usr/lib/dlib/objects"
+
 
 #define PREPRO_DIRECTIVE_PREFIX  "#"
 #define PREPRO_DIRECTIVE_INCLUDE "include"
@@ -45,6 +50,7 @@ bool output(parsedData_t *parsedData, char *dsbFileName);
 bool addSourceToConfig(char *src);
 bool addObjectToConfig(char *obj);
 bool addSectionToConfig(char *sec);
+void startDefined();
 
 extern char *g_keywords[];
 

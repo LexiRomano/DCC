@@ -21,8 +21,8 @@ char *g_keywords[] =
 {
     "int", "char", "do", "while", "for", "if", "else", "const",
     "static", "return", "continue", "break", "typedef", "struct",
-    "void", "NULL", "unsigned" "switch", "case", "__dsb__", "__lib__",
-    "__lib_obj__",
+    "void", "NULL", "unsigned" "switch", "case", "__dsb__",
+    "__std_obj__", "__lib_obj__",
     NULL
 };
 
@@ -1387,6 +1387,7 @@ static bool parseExpressionInternal(stackFrame_t  *stackFrame,
     if (isIdentifier(token) &&
         NULL != (tmpFunc = findFunction(functions, token)))
     {
+        tmpFunc->isUsed = true;
         token2 = peekNextTokenFromFile(inputFile);
 
         if (NULL == token2 ||
@@ -3172,6 +3173,11 @@ static void parseFunction(type_t *returnType,
         }
         newFunction->isDefined = true;
         currentFunction = NULL;
+
+        if (0 == strcmp("_start", identifier))
+        {
+            startDefined();
+        }
     }
 
     free(token);
@@ -3196,8 +3202,70 @@ static bool intake()
     type_t *foundType = NULL;
     type_t *tmpType   = NULL;
 
+    char    nameBuf[256] = {0};
+
     while (!noMoreTokens)
     {
+        token = peekNextTokenFromFile(inputFile);
+
+        if (NULL != token &&
+            (0 == strcmp(token, "__std_obj__") ||
+             0 == strcmp(token, "__lib_obj__")))
+        {
+            bool wasStd = 0 == strcmp(token, "__std_obj__");
+
+            free(token);
+            token = getNextTokenCheckingForLineChange();
+            free(token);
+            token = getNextTokenCheckingForLineChange();
+
+            if (false == stringWrappedWith(token, '"'))
+            {
+                printError("expected string");
+                drainToNextSemicolon();
+                continue;
+            }
+
+            if (false == stripQuotes(token))
+            {
+                INTERNAL_ERROR;
+                drainToNextSemicolon();
+                continue;
+            }
+
+            snprintf(nameBuf, sizeof(nameBuf), "%s/%s",
+                     wasStd ? STD_OBJECTS_PATH : LIB_OBJECTS_PATH, token);
+
+            free(token);
+            token = NULL;
+
+            if (false == addObjectToConfig(nameBuf))
+            {
+                drainToNextSemicolon();
+                continue;
+            }
+
+            token = getNextTokenCheckingForLineChange();
+
+            if (0 != strcmp(token, ";"))
+            {
+                free(token);
+                token = NULL;
+                printError("expected \";\"");
+                drainToNextSemicolon();
+            }
+
+            free(token);
+            token = NULL;
+            continue;
+        }
+
+        if (NULL != token)
+        {
+            free(token);
+            token = NULL;
+        }
+
         while (true)
         {
             if (NULL != token)
@@ -3336,10 +3404,23 @@ static bool intake()
         }
     }
 
+    if (!error)
+    {
+        for (function_t *f = functions->first; NULL != f; f = f->next)
+        {
+            if (f->isUsed && !f->isDefined)
+            {
+                addSectionToConfig(f->identifier);
+            }
+        }
+    }
+
     return !error;
 }
 
 // DEBUG
+
+#ifdef DEBUG
 
 #define PRINT_DEBUG_BANNER printf("\n========================================"\
                                     "========================================\n\n")
@@ -3770,6 +3851,7 @@ static void printDebug()
     PRINT_DEBUG_BANNER;
 }
 // DEBUG
+#endif
 
 parsedData_t *parse(char *inputFileName)
 {
@@ -3816,7 +3898,9 @@ parsedData_t *parse(char *inputFileName)
     }
 
     // DEBUG
+    #ifdef DEBUG
     printDebug();
+    #endif
     // DEBUG
 
     fclose(inputFile);

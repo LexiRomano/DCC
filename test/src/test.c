@@ -20,13 +20,9 @@ void myFunc(short int param1, unsigned char param2, uint8_t param3)
     //myFunc(param1, param2, param3);
 }
 
-void _start()
+void main()
 {
-    __dsb__(
-        "    .requires     __STACK_SPACE_START__\n"
-        "    GETABS        OA _start\n"
-        "    GETABS        OB __STACK_SPACE_START__\n"
-    );
+    myFunc(1, 2, 3);
 }
 
 uint8_t anotherOne;

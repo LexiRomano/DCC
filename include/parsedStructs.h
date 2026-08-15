@@ -204,6 +204,7 @@ typedef struct function_t
     stringLinkedList_t parameterNames;
     
     bool               isDefined;
+    bool               isUsed;
     stackFrame_t       definition;
     stringLinkedList_t requiredSymbols;
 
