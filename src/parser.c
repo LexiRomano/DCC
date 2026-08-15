@@ -21,7 +21,8 @@ char *g_keywords[] =
 {
     "int", "char", "do", "while", "for", "if", "else", "const",
     "static", "return", "continue", "break", "typedef", "struct",
-    "void", "NULL", "unsigned" "switch", "case", "__dsb__",
+    "void", "NULL", "unsigned" "switch", "case", "__dsb__", "__lib__",
+    "__lib_obj__",
     NULL
 };
 

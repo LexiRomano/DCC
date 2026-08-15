@@ -2,7 +2,11 @@
 
 static stringLinkedList_t src     = {0};
 static char             **inc     = NULL;
-static bool               keepTmp = false;            
+static bool               keepTmp = false;         
+
+static stringLinkedList_t configSource  = {0};
+static stringLinkedList_t configObject  = {0};
+static stringLinkedList_t configSection = {0};
 
 static void printHelp()
 {
@@ -173,6 +177,25 @@ static bool prepareGlobals()
     return true;
 }
 
+static bool finalizeGlobals()
+{
+    FILE *globalFile = NULL;
+
+    globalFile = fopen(GLOBALS_DSB_FILE, "a");
+
+    if (NULL == globalFile)
+    {
+        INTERNAL_ERROR;
+        return false;
+    }
+
+    fprintf(globalFile, "    .export __STACK_SPACE_START__\n");
+
+    fclose(globalFile);
+
+    return true;
+}
+
 static bool prepareConfig()
 {
     FILE *configFile = NULL;
@@ -185,12 +208,76 @@ static bool prepareConfig()
         return false;
     }
 
-    fprintf(configFile, ".out " OUTPUT_FILE_NAME "\n");
+    fprintf(configFile, ".out    " OUTPUT_FILE_NAME "\n");
+
+    for (strll_t *s = configSource.first; NULL != s; s = s->next)
+    {
+        fprintf(configFile, ".source %s\n", s->str);
+    }
+
     fprintf(configFile, ".source %s\n", GLOBALS_DSB_FILE);
+
+    for (strll_t *s = configObject.first; NULL != s; s = s->next)
+    {
+        fprintf(configFile, ".object %s\n", s->str);
+    }
+
+    fprintf(configFile, "\n_start\n");
+
+    for (strll_t *s = configSection.first; NULL != s; s = s->next)
+    {
+        fprintf(configFile, "%s\n", s->str);
+    }
+
+    fprintf(configFile, "%s\n", GLOBALS_SECTION_NAME);
 
     fclose(configFile);
 
     return true;
+}
+
+static bool addToSourceInternal(stringLinkedList_t *strll, char *str)
+{
+    strll_t *newStrll = NULL;
+
+    if (NULL == strll ||
+        NULL == str)
+    {
+        INTERNAL_ERROR;
+        return false;
+    }
+
+    if (NULL != findStringLinkedList(strll, str))
+    {
+        return true;
+    }
+
+    newStrll = addStringLinkedList(strll);
+
+    if (NULL == newStrll)
+    {
+        ALLOC_ERROR;
+        return false;
+    }
+
+    newStrll->str = strdup(str);
+
+    return true;
+}
+
+bool addSourceToConfig(char *src)
+{
+    return addToSourceInternal(&configSource, src);
+}
+
+bool addObjectToConfig(char *obj)
+{
+    return addToSourceInternal(&configObject, obj);
+}
+
+bool addSectionToConfig(char *sec)
+{
+    return addToSourceInternal(&configSection, sec);
 }
 
 int main(int argc, char *argv[])
@@ -209,8 +296,7 @@ int main(int argc, char *argv[])
     }
 
     if (false == createTmpDirectory() ||
-        false == prepareGlobals() ||
-        false == prepareConfig())
+        false == prepareGlobals())
     {
         success = false;
         goto fail;
@@ -243,17 +329,12 @@ int main(int argc, char *argv[])
 
     if (success)
     {
-        FILE *configFile = fopen(DFG_FILE, "a");
 
-        if (NULL == configFile)
+        if (false == finalizeGlobals() ||
+            false == prepareConfig())
         {
             success = false;
-        }
-        else
-        {
-            fprintf(configFile, "%s\n", GLOBALS_SECTION_NAME);
-
-            fclose(configFile);
+            goto fail;
         }
         
         if (0 != system("dssembly -k " DFG_FILE))
@@ -271,6 +352,9 @@ int main(int argc, char *argv[])
 
 fail:
     freeStringLinkedListContents(&src);
+    freeStringLinkedListContents(&configSource);
+    freeStringLinkedListContents(&configObject);
+    freeStringLinkedListContents(&configSection);
     for (int i = 0; inc[i] != NULL; i++)
     {
         free(inc[i]);

@@ -42,6 +42,10 @@ bool preprocessor(char *inName, char *outName, char **includes);
 parsedData_t *parse(char *inputFileName);
 bool output(parsedData_t *parsedData, char *dsbFileName);
 
+bool addSourceToConfig(char *src);
+bool addObjectToConfig(char *obj);
+bool addSectionToConfig(char *sec);
+
 extern char *g_keywords[];
 
 // Util

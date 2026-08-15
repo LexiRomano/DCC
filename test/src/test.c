@@ -23,9 +23,9 @@ void myFunc(short int param1, unsigned char param2, uint8_t param3)
 void _start()
 {
     __dsb__(
+        "    .requires     __STACK_SPACE_START__\n"
         "    GETABS        OA _start\n"
-        "    MOVE          OB OA\n"
-        //"    ADD           OB OB __STACK_SPACE_START__\n"
+        "    GETABS        OB __STACK_SPACE_START__\n"
     );
 }
 

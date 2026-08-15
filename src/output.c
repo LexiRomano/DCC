@@ -682,8 +682,6 @@ static bool outputStackFrame(stackFrame_t *sf)
 
 static bool outputFunctions()
 {
-    FILE *configFile = NULL;
-
     for (function_t *f = pd->functions.first; NULL != f; f = f->next)
     {
         if (false == f->isDefined)
@@ -691,24 +689,16 @@ static bool outputFunctions()
             continue;
         }
 
-        configFile = fopen(DFG_FILE, "a");
-
-        if (NULL == configFile)
-        {
-            return false;
-        }
-
-        fprintf(configFile, "%s\n", f->identifier);
-
-        fclose(configFile);
-        configFile = NULL;
-
         fprintf(outputFile, "\n.section %s\n", f->identifier);
         fprintf(outputFile, "    .export %s\n", f->identifier);
 
         // Declare required symbols
         if (0 != strcmp(f->identifier, "_start"))
         {
+            if (false == addSectionToConfig(f->identifier))
+            {
+                return false;
+            }
             //fprintf(outputFile, "    .requires __STACK_OVERFLOW__\n"); // TODO add common code segment
         }
         for (strll_t *s = f->requiredSymbols.first; NULL != s; s = s->next)
@@ -746,29 +736,6 @@ static bool outputFunctions()
     return true;
 }
 
-static bool addFileToConfig(char *dsbFileName)
-{
-    FILE *configFile = NULL;
-
-    if (NULL == dsbFileName)
-    {
-        return false;
-    }
-
-    configFile = fopen(DFG_FILE, "a");
-
-    if (NULL == configFile)
-    {
-        return false;
-    }
-
-    fprintf(configFile, ".source %s\n", dsbFileName);
-
-    fclose(configFile);
-
-    return true;
-}
-
 bool output(parsedData_t *parsedData, char *dsbFileName)
 {
     bool rc = true;
@@ -798,7 +765,7 @@ bool output(parsedData_t *parsedData, char *dsbFileName)
         return false;
     }
 
-    if (false == addFileToConfig(dsbFileName) ||
+    if (false == addSourceToConfig(dsbFileName) ||
         false == outputGlobalVariables() ||
         false == outputFunctions())
     {
