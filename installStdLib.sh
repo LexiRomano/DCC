@@ -4,6 +4,7 @@
 
 if [ ! -e dcc ]
 then
+    echo "Failed to make dcc"
     exit
 fi
 
@@ -17,7 +18,7 @@ cd stdlib
 
 for dir in *
 do
-    echo $dir
+    echo "Installing $dir"
     cd $dir
     if ../../dcc -O *.c
     then

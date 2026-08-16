@@ -1540,6 +1540,7 @@ static bool parseExpressionInternal(stackFrame_t  *stackFrame,
                 if (NULL == tmpStrll)
                 {
                     ALLOC_ERROR;
+                    error = true;
                     return false;
                 }
                 tmpStrll->str = strdup(tmpFunc->identifier);
@@ -1745,6 +1746,7 @@ static bool parseExpressionInternal(stackFrame_t  *stackFrame,
                     if (NULL == tmpStrll)
                     {
                         ALLOC_ERROR;
+                        error = true;
                         free(token);
                         return false;
                     }
@@ -2318,7 +2320,7 @@ static void doTypedef()
 }
 
 // Forward declaration
-static bool processStackFrame(stackFrame_t *stackFrame);
+static bool parseStackFrame(stackFrame_t *stackFrame);
 
 // The "if" has already been parsed
 static bool parseIfStatement(stackFrame_t *stackFrame,
@@ -2400,7 +2402,7 @@ static bool parseIfStatement(stackFrame_t *stackFrame,
     newExpression = NULL;
     newIf->consequence.prevAccessableStackFrame = stackFrame;
 
-    if (processStackFrame(&newIf->consequence))
+    if (parseStackFrame(&newIf->consequence))
     {
         *out = newIf;
         return true;
@@ -2412,7 +2414,7 @@ static bool parseIfStatement(stackFrame_t *stackFrame,
 }
 
 // The opening "{" has already been parsed
-static bool processStackFrame(stackFrame_t *stackFrame)
+static bool parseStackFrame(stackFrame_t *stackFrame)
 {
     char *token      = NULL;
     char *ident      = NULL;
@@ -2428,6 +2430,7 @@ static bool processStackFrame(stackFrame_t *stackFrame)
     if_t            *newIf            = NULL;
     assembly_t      *newAssembly      = NULL;
     strll_t         *tmpStrll         = NULL;
+    return_t        *newReturn        = NULL;
 
     if (NULL == stackFrame)
     {
@@ -2547,7 +2550,7 @@ static bool processStackFrame(stackFrame_t *stackFrame)
             newIf = calloc(1, sizeof(*newIf));
             newIf->consequence.prevAccessableStackFrame = stackFrame;
 
-            if (false == processStackFrame(&newIf->consequence))
+            if (false == parseStackFrame(&newIf->consequence))
             {
                 free(newIf);
                 continue;
@@ -2607,6 +2610,7 @@ static bool processStackFrame(stackFrame_t *stackFrame)
             if (NULL == newAssembly)
             {
                 ALLOC_ERROR;
+                error = true;
                 return false;
             }
 
@@ -2660,14 +2664,104 @@ static bool processStackFrame(stackFrame_t *stackFrame)
             if (NULL == tmpVoidContainer)
             {
                 ALLOC_ERROR;
+                error = true;
                 freeStringLinkedListContents(newAssembly);
                 free(newAssembly);
-                return false;
+                break;
             }
 
             tmpVoidContainer->data = newAssembly;
             tmpVoidContainer->type = assembly_e;
             newAssembly = NULL;
+
+            continue;
+        }
+        if (0 == strcmp("return", token))
+        {
+            free(token);
+
+            token = peekNextTokenFromFile(inputFile);
+            if (NULL == token)
+            {
+                printError("expected \";\" or statement after return");
+                break;
+            }
+
+            if (0 == strcmp(";", token))
+            {
+                free(token);
+                token = getNextTokenCheckingForLineChange();
+                free(token);
+                token = NULL;
+
+                if (  !  currentFunction->returnType.isVoid ||
+                    0 != currentFunction->returnType.pointerDepth)
+                {
+                    printError("void return on non-void function");
+
+                    break;
+                }
+
+                newReturn = calloc(1, sizeof(*newReturn));
+
+                if (NULL == newReturn)
+                {
+                    ALLOC_ERROR;
+                    error = true;
+                    break;
+                }
+
+                tmpVoidContainer = addVoidContainer(&stackFrame->codeBlock);
+
+                if (NULL == tmpVoidContainer)
+                {
+                    ALLOC_ERROR;
+                    error = true;
+                    free(newReturn);
+                    break;
+                }
+
+                tmpVoidContainer->data = newReturn;
+                tmpVoidContainer->type = return_e;
+                newReturn = NULL;
+
+                continue;
+            }
+
+            free(token);
+            token = NULL;
+
+            newReturn = calloc(1, sizeof(*newReturn));
+
+            if (NULL == newReturn)
+            {
+                ALLOC_ERROR;
+                error = true;
+                break;
+            }
+
+            if (false == parseExpression(stackFrame, &newReturn->value))
+            {
+                free(newReturn);
+                newReturn = NULL;
+                continue;
+            }
+
+            tmpVoidContainer = addVoidContainer(&stackFrame->codeBlock);
+
+            if (NULL == tmpVoidContainer)
+            {
+                ALLOC_ERROR;
+                error = true;
+                freeExpression(&newReturn->value);
+                free(newReturn);
+                newReturn = NULL;
+                break;
+            }
+
+            tmpVoidContainer->data = newReturn;
+            tmpVoidContainer->type = return_e;
+            newReturn = NULL;
 
             continue;
         }
@@ -2678,7 +2772,7 @@ static bool processStackFrame(stackFrame_t *stackFrame)
             token = NULL;
             tmpStackFrame = calloc(1, sizeof(*stackFrame));
             tmpStackFrame->prevAccessableStackFrame = stackFrame;
-            if (processStackFrame(tmpStackFrame))
+            if (parseStackFrame(tmpStackFrame))
             {
                 tmpVoidContainer = addVoidContainer(&stackFrame->codeBlock);
 
@@ -2779,6 +2873,7 @@ static bool processStackFrame(stackFrame_t *stackFrame)
                     {
                         allocErrorVar:
                         ALLOC_ERROR;
+                        error = true;
                         if (NULL != tmpVoidContainer)
                         {
                             free(tmpVoidContainer);
@@ -3036,6 +3131,7 @@ static void parseFunction(type_t *returnType,
         if (NULL == tmpStrll)
         {
             ALLOC_ERROR;
+            error = true;
             freeFunctionContents(newFunction);
             free(newFunction);
             return;
@@ -3142,6 +3238,7 @@ static void parseFunction(type_t *returnType,
     if (NULL == newFunction->identifier)
     {
         ALLOC_ERROR;
+        error = true;
         freeFunctionContents(newFunction);
         free(newFunction);
         return;
@@ -3163,11 +3260,9 @@ static void parseFunction(type_t *returnType,
         currentFunction = newFunction;
         
         if (false == addParamsToStackFrame(newFunction) ||
-            false == processStackFrame(&newFunction->definition) ||
+            false == parseStackFrame(&newFunction->definition) ||
             false == calculateOffsets(&newFunction->definition))
         {
-            freeFunctionContents(newFunction);
-            free(newFunction);
             currentFunction = NULL;
             return;
         }
@@ -3715,6 +3810,18 @@ static void DEBUG_printStackFrame(int padding, stackFrame_t *sf)
                         printf("%s", s->str);
                     }
                     printf(")\n");
+                    break;
+                }
+                case return_e:
+                {
+                    return_t *ret = vc->data;
+
+                    printf("return %s", ret->value ? "" : "VOID\n");
+                    if (ret->value)
+                    {
+                        DEBUG_printExpression(ret->value);
+                        printf("\n");
+                    }
                     break;
                 }
                 default:

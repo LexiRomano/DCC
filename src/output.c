@@ -610,6 +610,27 @@ static bool outputAssembly(assembly_t *dsb)
     return true;
 }
 
+static bool outputReturn(return_t *ret)
+{
+    if (NULL == ret)
+    {
+        return false;
+    }
+
+    if (ret->value)
+    {
+        if (false == outputExpression(ret->value))
+        {
+            return false;
+        }
+
+        PUT(DSB_STOR_OB); fprintf(outputFile, "G0 0\n");
+    }
+    PUT(DSB_BRAL);    fprintf(outputFile, "ret\n");
+
+    return true;
+}
+
 static bool outputStackFrame(stackFrame_t *sf)
 {
     if (NULL == sf)
@@ -651,6 +672,7 @@ static bool outputStackFrame(stackFrame_t *sf)
                 {
                     return false;
                 }
+                break;
             }
             case assembly_e:
             {
@@ -658,9 +680,19 @@ static bool outputStackFrame(stackFrame_t *sf)
                 {
                     return false;
                 }
+                break;
+            }
+            case return_e:
+            {
+                if (false == outputReturn(vc->data))
+                {
+                    return false;
+                }
+                break;
             }
             default:
             {
+                fprintf(outputFile, "    TODO %d\n", vc->type);
                 continue;
             }
         }
@@ -729,7 +761,7 @@ static bool outputFunctions()
         }
         else
         {
-            PUT(DSB_MOVE); fprintf(outputFile, "SP OB\n");
+            PUT(DSB_SUB); fprintf(outputFile, "SP OB SB\n");
         }
         PUT(DSB_RETURN);
     }

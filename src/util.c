@@ -104,13 +104,14 @@ static inline bool isCharWhitespace(char c)
 
 char *getNextTokenFromBuf(char *buf, int bufSize, bool tokenizeAngleBrackets, int *startIndex)
 {
-    bool foundStart       = false;
-    int  start            = 0;
-    int  end              = 0;
-    bool isInDoubleQuote  = false;
-    bool isInSingleQuote  = false;
-    bool isInAngleBracket = false;
-    bool isInEscape       = false;
+    bool  foundStart       = false;
+    int   start            = 0;
+    int   end              = 0;
+    bool  isInDoubleQuote  = false;
+    bool  isInSingleQuote  = false;
+    bool  isInAngleBracket = false;
+    bool  isInEscape       = false;
+    char *out              = NULL;
 
     if (NULL == buf        ||
         NULL == startIndex ||
@@ -260,7 +261,11 @@ char *getNextTokenFromBuf(char *buf, int bufSize, bool tokenizeAngleBrackets, in
         return NULL;
     }
 
-    return strncpy(calloc(end - start + 1, sizeof(char)), &buf[start], end - start + 1);
+    out = strncpy(calloc(end - start + 2, sizeof(char)), &buf[start], end - start + 1);
+
+    out[end - start + 1] = '\0';
+
+    return out;
 }
 
 char *getNextTokenFromFile(FILE *file, int *lineNumber)
@@ -1246,6 +1251,12 @@ void freeVoidListContents(voidList_t *vl)
                 case assembly_e:
                 {
                     freeStringLinkedListContents(cur->data);
+                    break;
+                }
+                case return_e:
+                {
+                    return_t *r = cur->data;
+                    freeExpression(&r->value);
                     break;
                 }
                 default:

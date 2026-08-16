@@ -243,10 +243,7 @@ static bool prepareConfig()
         fprintf(configFile, ".object %s\n", s->str);
     }
 
-    if (false == startIsDefined)
-    {
-        fprintf(configFile, "\n_start\n");
-    }
+    fprintf(configFile, "\n_start\n");
 
     for (strll_t *s = configSection.first; NULL != s; s = s->next)
     {
