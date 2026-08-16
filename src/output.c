@@ -145,8 +145,7 @@ static bool outputExpressionInternal(expression_t *exp, uint8_t baseReg, bool fo
         }
         case et_stringLiteral_e:
         {
-            fprintf(outputFile, "    //TODO string literal\n");
-            INTERNAL_ERROR;
+            fprintf(outputFile, "    TODO string literal\n");
             break;
         }
         case et_unary_e:
@@ -175,9 +174,8 @@ static bool outputExpressionInternal(expression_t *exp, uint8_t baseReg, bool fo
                 }
                 default:
                 {
-                    fprintf(outputFile, "    //TODO unary operation %d\n",
+                    fprintf(outputFile, "    TODO unary operation %d\n",
                             exp->contents.unary.operation);
-                    INTERNAL_ERROR;
                     break;
                 }
             }
@@ -429,9 +427,8 @@ static bool outputExpressionInternal(expression_t *exp, uint8_t baseReg, bool fo
                 }
                 default:
                 {
-                    fprintf(outputFile, "    //TODO binary operation %d\n",
+                    fprintf(outputFile, "    TODO binary operation %d\n",
                             exp->contents.binary.operation);
-                    INTERNAL_ERROR;
                     break;
                 }
             }
@@ -439,8 +436,7 @@ static bool outputExpressionInternal(expression_t *exp, uint8_t baseReg, bool fo
         }
         case et_trinary_e:
         {
-            fprintf(outputFile, "    //TODO trinary\n");
-            INTERNAL_ERROR;
+            fprintf(outputFile, "    TODO trinary\n");
             break;
         }
         case et_functionCall_e:
@@ -599,6 +595,7 @@ static bool outputAssembly(assembly_t *dsb)
 {
     if (NULL == dsb)
     {
+        INTERNAL_ERROR;
         return false;
     }
 
@@ -614,6 +611,7 @@ static bool outputReturn(return_t *ret)
 {
     if (NULL == ret)
     {
+        INTERNAL_ERROR;
         return false;
     }
 
@@ -627,6 +625,41 @@ static bool outputReturn(return_t *ret)
         PUT(DSB_STOR_OB); fprintf(outputFile, "G0 0\n");
     }
     PUT(DSB_BRAL);    fprintf(outputFile, "ret\n");
+
+    return true;
+}
+
+static bool outputWhile(while_t *wle)
+{
+    unsigned int expressionId = 0;
+
+    if (NULL == wle ||
+        NULL == wle->condition)
+    {
+        INTERNAL_ERROR;
+        return false;
+    }
+
+    expressionId = ftell(outputFile);
+
+    fprintf(outputFile, "    :__while_top_%u__\n", expressionId);
+
+    if (false == outputExpression(wle->condition))
+    {
+        return false;
+    }
+
+    PUT(DSB_COMP); fprintf(outputFile, "G0 0\n");
+    PUT(DSB_BREQ); fprintf(outputFile, "__while_end_%u__\n", expressionId);
+
+    if (false == outputStackFrame(&wle->loop))
+    {
+        return false;
+    }
+
+    PUT(DSB_BRAL); fprintf(outputFile, "__while_top_%u__\n", expressionId);
+
+    fprintf(outputFile, "    :__while_end_%u__\n", expressionId);
 
     return true;
 }
@@ -685,6 +718,14 @@ static bool outputStackFrame(stackFrame_t *sf)
             case return_e:
             {
                 if (false == outputReturn(vc->data))
+                {
+                    return false;
+                }
+                break;
+            }
+            case while_e:
+            {
+                if (false == outputWhile(vc->data))
                 {
                     return false;
                 }

@@ -2431,6 +2431,7 @@ static bool parseStackFrame(stackFrame_t *stackFrame)
     assembly_t      *newAssembly      = NULL;
     strll_t         *tmpStrll         = NULL;
     return_t        *newReturn        = NULL;
+    while_t         *newWhile         = NULL;
 
     if (NULL == stackFrame)
     {
@@ -2580,9 +2581,108 @@ static bool parseStackFrame(stackFrame_t *stackFrame)
         }
         if (0 == strcmp("while", token))
         {
-            //TODO
-            printError("while statements not implemented");
-            break;
+            free(token);
+            token = getNextTokenCheckingForLineChange();
+
+            if (NULL == token ||
+                0    != strcmp("(", token))
+            {
+                printError("expected \"(\" after while statement");
+                drainToEndOfBlock(false);
+                continue;
+            }
+
+            free(token);
+            token = NULL;
+
+            newWhile = calloc(1, sizeof(*newWhile));
+
+            if (NULL == newWhile)
+            {
+                ALLOC_ERROR;
+                error = false;
+                break;
+            }
+
+            if (false == parseExpression(stackFrame, &newWhile->condition))
+            {
+                free(newWhile);
+                newWhile = NULL;
+                drainToEndOfBlock(false);
+                continue;
+            }
+
+            if (NULL == newWhile->condition)
+            {
+                printError("expected expression");
+                free(newWhile);
+                newWhile = NULL;
+                drainToEndOfBlock(false);
+                continue;
+            }
+
+            token = getNextTokenCheckingForLineChange();
+
+            if (NULL == token ||
+                0    != strcmp(")", token))
+            {
+                printError("expected \")\"");
+                freeExpression(&newWhile->condition);
+                free(newWhile);
+                newWhile = NULL;
+                if (NULL != token &&
+                    0    == strcmp("{", token))
+                {
+                    drainToEndOfBlock(true);
+                }
+                else
+                {
+                    drainToEndOfBlock(false);
+                }
+                continue;
+            }
+
+            free(token);
+            token = getNextTokenCheckingForLineChange();
+
+            if (NULL == token ||
+                0    != strcmp("{", token))
+            {
+                printError("expected \"{\"");
+                freeExpression(&newWhile->condition);
+                free(newWhile);
+                newWhile = NULL;
+                drainToNextSemicolon();
+                continue;
+            }
+
+            newWhile->loop.prevAccessableStackFrame = stackFrame;
+
+            if (false == parseStackFrame(&newWhile->loop))
+            {
+                freeExpression(&newWhile->condition);
+                free(newWhile);
+                newWhile = NULL;
+                continue;
+            }
+
+            tmpVoidContainer = addVoidContainer(&stackFrame->codeBlock);
+
+            if (NULL == tmpVoidContainer)
+            {
+                ALLOC_ERROR;
+                error = true;
+                freeExpression(&newWhile->condition);
+                freeVoidListContents(&newWhile->loop.codeBlock);
+                freeVariableListContents(&newWhile->loop.variables);
+                free(newWhile);
+                newWhile = NULL;
+            }
+
+            tmpVoidContainer->type = while_e;
+            tmpVoidContainer->data = newWhile;
+            newWhile = NULL;
+            continue;
         }
         if (0 == strcmp("switch", token))
         {
@@ -3822,6 +3922,16 @@ static void DEBUG_printStackFrame(int padding, stackFrame_t *sf)
                         DEBUG_printExpression(ret->value);
                         printf("\n");
                     }
+                    break;
+                }
+                case while_e:
+                {
+                    while_t *w = vc->data;
+
+                    printf("while (");
+                    DEBUG_printExpression(w->condition);
+                    printf("):\n");
+                    DEBUG_printStackFrame(padding + 4, &w->loop);
                     break;
                 }
                 default:

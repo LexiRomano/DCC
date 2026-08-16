@@ -1256,7 +1256,21 @@ void freeVoidListContents(voidList_t *vl)
                 case return_e:
                 {
                     return_t *r = cur->data;
-                    freeExpression(&r->value);
+                    if (NULL != r->value)
+                    {
+                        freeExpression(&r->value);
+                    }
+                    break;
+                }
+                case while_e:
+                {
+                    while_t *w = cur->data;
+                    if (NULL != w->condition)
+                    {
+                        freeExpression(&w->condition);
+                    }
+                    freeVariableListContents(&w->loop.variables);
+                    freeVoidListContents(&w->loop.codeBlock);
                     break;
                 }
                 default:

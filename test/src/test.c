@@ -17,6 +17,11 @@ int myFunc(short int param1, unsigned char param2, uint8_t param3)
 
     anotherFunc(a + b, b);
 
+    while (a < 10)
+    {
+        a = a + 1;
+    }
+
     return 3;
 }
 

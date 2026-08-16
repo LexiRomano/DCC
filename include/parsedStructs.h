@@ -40,7 +40,8 @@ typedef enum
     type_e,
     if_e,
     assembly_e,
-    return_e
+    return_e,
+    while_e
 } ident_e;
 
 typedef enum
@@ -343,6 +344,12 @@ typedef struct
 {
     expression_t *value;
 } return_t;
+
+typedef struct
+{
+    expression_t *condition;
+    stackFrame_t  loop;
+} while_t;
 
 typedef struct
 {
