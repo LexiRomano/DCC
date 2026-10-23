@@ -46,9 +46,9 @@ static bool outputExpressionInternal(expression_t *exp, uint8_t baseReg, bool fo
                 else
                 {
                     // Somewhere in the function frame
-                    PUT(DSB_SUB); fprintf(outputFile, "G%hhu OB OA\n", baseReg);
-                    PUT(DSB_ADD); fprintf(outputFile, "G%hhu G%hhu %u\n",
-                                          baseReg, baseReg, var->offsetInFunc);
+                    PUT(DSB_SUBI); fprintf(outputFile, "G%hhu OB OA\n", baseReg);
+                    PUT(DSB_ADDI); fprintf(outputFile, "G%hhu G%hhu %u\n",
+                                           baseReg, baseReg, var->offsetInFunc);
                 }
             }
             else
@@ -60,17 +60,17 @@ static bool outputExpressionInternal(expression_t *exp, uint8_t baseReg, bool fo
                     {
                         case 1:
                         {
-                            PUT(DSB_LOAD_C_OA);
+                            PUT(DSB_LOADCOA);
                             break;
                         }
                         case 2:
                         {
-                            PUT(DSB_LOAD_H_OA);
+                            PUT(DSB_LOADHOA);
                             break;
                         }
                         case 4:
                         {
-                            PUT(DSB_LOAD_OA);
+                            PUT(DSB_LOADWOA);
                             break;
                         }
                         default:
@@ -85,21 +85,21 @@ static bool outputExpressionInternal(expression_t *exp, uint8_t baseReg, bool fo
                 else
                 {
                     // Somewhere in the function frame
-                                        switch (var->type.size)
+                    switch (var->type.size)
                     {
                         case 1:
                         {
-                            PUT(DSB_LOAD_C_OB);
+                            PUT(DSB_LOADCOB);
                             break;
                         }
                         case 2:
                         {
-                            PUT(DSB_LOAD_H_OB);
+                            PUT(DSB_LOADHOB);
                             break;
                         }
                         case 4:
                         {
-                            PUT(DSB_LOAD_OB);
+                            PUT(DSB_LOADWOB);
                             break;
                         }
                         default:
@@ -120,17 +120,17 @@ static bool outputExpressionInternal(expression_t *exp, uint8_t baseReg, bool fo
 
                     if (1 == var->type.size)
                     {
-                        PUT(DSB_COMP); fprintf(outputFile, "G%hhu 0x80\n", baseReg);
-                        PUT(DSB_BRLO); fprintf(outputFile, "__skipSigExt_%u__\n", expressionId);
-                        PUT(DSB_NOT);  fprintf(outputFile, "G%hhu G%hhu\n", baseReg, baseReg);
-                        PUT(DSB_XOR);  fprintf(outputFile, "G%hhu G%hhu 0xFF\n", baseReg, baseReg);
+                        PUT(DSB_COMPI);  fprintf(outputFile, "G%hhu 0x80\n", baseReg);
+                        PUT(DSB_BRLOPC); fprintf(outputFile, "__skipSigExt_%u__\n", expressionId);
+                        PUT(DSB_NOT);    fprintf(outputFile, "G%hhu G%hhu\n", baseReg, baseReg);
+                        PUT(DSB_XOR);    fprintf(outputFile, "G%hhu G%hhu 0xFF\n", baseReg, baseReg);
                     }
                     else
                     {
-                        PUT(DSB_COMP); fprintf(outputFile, "G%hhu 0x8000\n", baseReg);
-                        PUT(DSB_BRLO); fprintf(outputFile, "__skipSigExt_%u__\n", expressionId);
-                        PUT(DSB_NOT);  fprintf(outputFile, "G%hhu G%hhu\n", baseReg, baseReg);
-                        PUT(DSB_XOR);  fprintf(outputFile, "G%hhu G%hhu 0xFFFF\n", baseReg, baseReg);
+                        PUT(DSB_COMPI);  fprintf(outputFile, "G%hhu 0x8000\n", baseReg);
+                        PUT(DSB_BRLOPC); fprintf(outputFile, "__skipSigExt_%u__\n", expressionId);
+                        PUT(DSB_NOT);    fprintf(outputFile, "G%hhu G%hhu\n", baseReg, baseReg);
+                        PUT(DSB_XOR);    fprintf(outputFile, "G%hhu G%hhu 0xFFFF\n", baseReg, baseReg);
                     }
 
                     fprintf(outputFile, "    :__skipSigExt_%u__\n", expressionId);
@@ -164,9 +164,9 @@ static bool outputExpressionInternal(expression_t *exp, uint8_t baseReg, bool fo
 
                     if (op_logicalNot_e == exp->contents.unary.operation)
                     {
-                        PUT(DSB_COMP); fprintf(outputFile, "G%hhu 1\n", baseReg);
-                        PUT(DSB_MOVE); fprintf(outputFile, "G%hhu 0\n", baseReg);
-                        PUT(DSB_BSLC); fprintf(outputFile, "G%hhu G%hhu 1\n", baseReg, baseReg);
+                        PUT(DSB_COMPI); fprintf(outputFile, "G%hhu 1\n", baseReg);
+                        PUT(DSB_MOVE);  fprintf(outputFile, "G%hhu 0\n", baseReg);
+                        PUT(DSB_BSLC);  fprintf(outputFile, "G%hhu G%hhu 1\n", baseReg, baseReg);
                     }
 
                     PUT(DSB_NOT); fprintf(outputFile, "G%hhu G%hhu\n", baseReg, baseReg);
@@ -202,17 +202,17 @@ static bool outputExpressionInternal(expression_t *exp, uint8_t baseReg, bool fo
                     {
                         case 1:
                         {
-                            PUT(DSB_STOR_C_OA);
+                            PUT(DSB_STORCOA);
                             break;
                         }
                         case 2:
                         {
-                            PUT(DSB_STOR_H_OA);
+                            PUT(DSB_STORHOA);
                             break;
                         }
                         case 4:
                         {
-                            PUT(DSB_STOR_OA);
+                            PUT(DSB_STORWOA);
                             break;
                         }
                         default:
@@ -246,10 +246,10 @@ static bool outputExpressionInternal(expression_t *exp, uint8_t baseReg, bool fo
                     switch (exp->contents.binary.operation)
                     {
                         case op_addition_e:
-                        {PUT(DSB_ADD);break;}
+                        {PUT(DSB_ADDI);break;}
 
                         case op_subtraction_e:
-                        {PUT(DSB_SUB);break;}
+                        {PUT(DSB_SUBI);break;}
 
                         case op_bitshiftLeft_e:
                         {PUT(DSB_BSLT);break;}
@@ -300,25 +300,25 @@ static bool outputExpressionInternal(expression_t *exp, uint8_t baseReg, bool fo
                         isSignedComparison = true;
                     }
 
-                    PUT(DSB_COMP);fprintf(outputFile, "G%hhu G%hhu\n", baseReg, baseReg + 1);
+                    PUT(DSB_COMPI);fprintf(outputFile, "G%hhu G%hhu\n", baseReg, baseReg + 1);
 
                     switch (exp->contents.binary.operation)
                     {
                         case op_equals_e:
-                        {PUT(DSB_BREQ);break;}
+                        {PUT(DSB_BREQPC);break;}
 
                         case op_notEquals_e:
-                        {PUT(DSB_BRNE);break;}
+                        {PUT(DSB_BRNEPC);break;}
                         
                         case op_greaterThan_e:
                         {
                             if (isSignedComparison)
                             {
-                                PUT(DSB_BRGT);
+                                PUT(DSB_BRGTPC);
                             }
                             else
                             {
-                                PUT(DSB_BRHI);
+                                PUT(DSB_BRHIPC);
                             }
                             break;
                         }
@@ -326,11 +326,11 @@ static bool outputExpressionInternal(expression_t *exp, uint8_t baseReg, bool fo
                         {
                             if (isSignedComparison)
                             {
-                                PUT(DSB_BRGE);
+                                PUT(DSB_BRGEPC);
                             }
                             else
                             {
-                                PUT(DSB_BRHS);
+                                PUT(DSB_BRHSPC);
                             }
                             break;
                         }
@@ -338,11 +338,11 @@ static bool outputExpressionInternal(expression_t *exp, uint8_t baseReg, bool fo
                         {
                             if (isSignedComparison)
                             {
-                                PUT(DSB_BRLE);
+                                PUT(DSB_BRLEPC);
                             }
                             else
                             {
-                                PUT(DSB_BRLS);
+                                PUT(DSB_BRLSPC);
                             }
                             break;
                         }
@@ -350,11 +350,11 @@ static bool outputExpressionInternal(expression_t *exp, uint8_t baseReg, bool fo
                         {
                             if (isSignedComparison)
                             {
-                                PUT(DSB_BRLT);
+                                PUT(DSB_BRLTPC);
                             }
                             else
                             {
-                                PUT(DSB_BRLO);
+                                PUT(DSB_BRLOPC);
                             }
                             break;
                         }
@@ -362,12 +362,12 @@ static bool outputExpressionInternal(expression_t *exp, uint8_t baseReg, bool fo
                         {INTERNAL_ERROR;return false;}
                     }
 
-                                   fprintf(outputFile, "__isTrue_%u__\n", statementId);
-                    PUT(DSB_MOVE); fprintf(outputFile, "G%hhu 0\n", baseReg);
-                    PUT(DSB_BRAL); fprintf(outputFile, "__wasFalse_%u__\n", statementId);
-                                   fprintf(outputFile, "    :__isTrue_%u__\n", statementId);
-                    PUT(DSB_MOVE); fprintf(outputFile, "G%hhu 1\n", baseReg);
-                                   fprintf(outputFile, "    :__wasFalse_%u__\n", statementId);
+                                     fprintf(outputFile, "__isTrue_%u__\n", statementId);
+                    PUT(DSB_MOVE);   fprintf(outputFile, "G%hhu 0\n", baseReg);
+                    PUT(DSB_BRALPC); fprintf(outputFile, "__wasFalse_%u__\n", statementId);
+                                     fprintf(outputFile, "    :__isTrue_%u__\n", statementId);
+                    PUT(DSB_MOVE);   fprintf(outputFile, "G%hhu 1\n", baseReg);
+                                     fprintf(outputFile, "    :__wasFalse_%u__\n", statementId);
 
                     break;
                 }
@@ -385,14 +385,14 @@ static bool outputExpressionInternal(expression_t *exp, uint8_t baseReg, bool fo
 
                     statementId = ftell(outputFile);
 
-                    PUT(DSB_COMP); fprintf(outputFile, "G%hhu 0\n", baseReg);
+                    PUT(DSB_COMPI); fprintf(outputFile, "G%hhu 0\n", baseReg);
                     if (op_logicalAnd_e == exp->contents.binary.operation)
                     {
-                        PUT(DSB_BREQ); fprintf(outputFile, "__andFail_%u__\n", statementId);
+                        PUT(DSB_BREQPC); fprintf(outputFile, "__andFail_%u__\n", statementId);
                     }
                     else
                     {
-                        PUT(DSB_BRNE); fprintf(outputFile, "__orSuccess_%u__\n", statementId);
+                        PUT(DSB_BRNEPC); fprintf(outputFile, "__orSuccess_%u__\n", statementId);
                     }
                     
 
@@ -403,24 +403,24 @@ static bool outputExpressionInternal(expression_t *exp, uint8_t baseReg, bool fo
                         return false;
                     }
 
-                    PUT(DSB_COMP); fprintf(outputFile, "G%hhu 0\n", baseReg);
+                    PUT(DSB_COMPI); fprintf(outputFile, "G%hhu 0\n", baseReg);
                     if (op_logicalAnd_e == exp->contents.binary.operation)
                     {
-                        PUT(DSB_BREQ); fprintf(outputFile, "__andFail_%u__\n", statementId);
-                        PUT(DSB_MOVE); fprintf(outputFile, "G%hhu 1\n", baseReg);
-                        PUT(DSB_BRAL); fprintf(outputFile, "__andSucceded_%u__\n", statementId);
-                                       fprintf(outputFile, "    :__andFail_%u__\n", statementId);
-                        PUT(DSB_MOVE); fprintf(outputFile, "G%hhu 0\n", baseReg);
-                                       fprintf(outputFile, "    :__andSucceded_%u__\n", statementId);
+                        PUT(DSB_BREQPC); fprintf(outputFile, "__andFail_%u__\n", statementId);
+                        PUT(DSB_MOVE);   fprintf(outputFile, "G%hhu 1\n", baseReg);
+                        PUT(DSB_BRALPC); fprintf(outputFile, "__andSucceded_%u__\n", statementId);
+                                         fprintf(outputFile, "    :__andFail_%u__\n", statementId);
+                        PUT(DSB_MOVE);   fprintf(outputFile, "G%hhu 0\n", baseReg);
+                                         fprintf(outputFile, "    :__andSucceded_%u__\n", statementId);
                     }
                     else
                     {
-                        PUT(DSB_BRNE); fprintf(outputFile, "__orSuccess_%u__\n", statementId);
-                        PUT(DSB_MOVE); fprintf(outputFile, "G%hhu 0\n", baseReg);
-                        PUT(DSB_BRAL); fprintf(outputFile, "__orFailed_%u__\n", statementId);
-                                       fprintf(outputFile, "    :__orSuccess_%u__\n", statementId);
-                        PUT(DSB_MOVE); fprintf(outputFile, "G%hhu 1\n", baseReg);
-                                       fprintf(outputFile, "    :__orFailed_%u__\n", statementId);
+                        PUT(DSB_BRNEPC); fprintf(outputFile, "__orSuccess_%u__\n", statementId);
+                        PUT(DSB_MOVE);   fprintf(outputFile, "G%hhu 0\n", baseReg);
+                        PUT(DSB_BRALPC); fprintf(outputFile, "__orFailed_%u__\n", statementId);
+                                         fprintf(outputFile, "    :__orSuccess_%u__\n", statementId);
+                        PUT(DSB_MOVE);   fprintf(outputFile, "G%hhu 1\n", baseReg);
+                                         fprintf(outputFile, "    :__orFailed_%u__\n", statementId);
                     }
 
                     break;
@@ -457,12 +457,12 @@ static bool outputExpressionInternal(expression_t *exp, uint8_t baseReg, bool fo
             // We can't directly save the value of OB since that would not make
             // the code relocatable. Instead we push the difference, calculated
             // in OC
-            PUT(DSB_SUB);  fprintf(outputFile, "OC OB OA\n");
+            PUT(DSB_SUBI); fprintf(outputFile, "OC OB OA\n");
             PUT(DSB_PUSH); fprintf(outputFile, "OC\n");
 
             // Align OC to the base of the next function frame
-            PUT(DSB_ADD);  fprintf(outputFile, "OC SB SP\n");
-            PUT(DSB_ADD);  fprintf(outputFile, "OC OC 4\n");
+            PUT(DSB_ADDI); fprintf(outputFile, "OC SB SP\n");
+            PUT(DSB_ADDI); fprintf(outputFile, "OC OC 4\n");
 
             e = exp->contents.functionCall.firstParam;
             for (int pi = 0; pi < paramIndex; pi++)
@@ -477,17 +477,17 @@ static bool outputExpressionInternal(expression_t *exp, uint8_t baseReg, bool fo
                 {
                     case 1:
                     {
-                        PUT(DSB_STOR_C_OC);
+                        PUT(DSB_STORCOC);
                         break;
                     }
                     case 2:
                     {
-                        PUT(DSB_STOR_H_OC);
+                        PUT(DSB_STORHOC);
                         break;
                     }
                     case 4:
                     {
-                        PUT(DSB_STOR_OC);
+                        PUT(DSB_STORWOC);
                         break;
                     }
                     default:
@@ -506,15 +506,49 @@ static bool outputExpressionInternal(expression_t *exp, uint8_t baseReg, bool fo
             PUT(DSB_MOVE); fprintf(outputFile, "OB OC\n");
 
             // Branch
-            PUT(DSB_BRAL_P); fprintf(outputFile, "%s\n", exp->contents.functionCall.function->identifier);
+            PUT(DSB_BPALPC); fprintf(outputFile, "%s\n", exp->contents.functionCall.function->identifier);
 
             // Re-calculate OC since we might have lost it and we can't store it
             // before the function call
             PUT(DSB_MOVE); fprintf(outputFile, "OC OB\n");
 
+            // Use return value
+            if (false == exp->contents.functionCall.function->returnType.isVoid ||
+                0     != exp->contents.functionCall.function->returnType.pointerDepth)
+            {
+                switch (exp->contents.functionCall.function->returnType.size)
+                {
+                    case 1:
+                    {
+                        PUT(DSB_LOADCOC);
+                        break;
+                    }
+                    case 2:
+                    {
+                        PUT(DSB_LOADHOC);
+                        break;
+                    }
+                    case 4:
+                    {
+                        PUT(DSB_LOADWOC);
+                        break;
+                    }
+                    default:
+                    {
+                        INTERNAL_ERROR;
+                        printf("%d\n", exp->contents.functionCall.function->returnType.size);
+                        return false;
+                    }
+                }
+
+                fprintf(outputFile, "G%hhu 0\n", baseReg);
+            }
+
+
+
             // Re-align OB (we pushed the diff between OB and OA, so add OA back)
-            PUT(DSB_POP); fprintf(outputFile, "OB\n");
-            PUT(DSB_ADD); fprintf(outputFile, "OB OB OA\n");
+            PUT(DSB_POP);  fprintf(outputFile, "OB\n");
+            PUT(DSB_ADDI); fprintf(outputFile, "OB OB OA\n");
             break;
         }
     }
@@ -565,8 +599,8 @@ static bool outputIf(if_t *ifData)
             }
 
             outputExpression(ifData->condition);
-            PUT(DSB_COMP); fprintf(outputFile, "G0 0\n");
-            PUT(DSB_BREQ);
+            PUT(DSB_COMPI); fprintf(outputFile, "G0 0\n");
+            PUT(DSB_BREQPC);
             if (NULL == ifData->next)
             {
                 fprintf(outputFile, "__doneIf_%u__\n", endId);
@@ -581,7 +615,7 @@ static bool outputIf(if_t *ifData)
 
         if (NULL != ifData->next)
         {
-            PUT(DSB_BRAL); fprintf(outputFile, "__doneIf_%u__\n", endId);
+            PUT(DSB_BRALPC); fprintf(outputFile, "__doneIf_%u__\n", endId);
         }
 
         ifData = ifData->next;
@@ -622,9 +656,9 @@ static bool outputReturn(return_t *ret)
             return false;
         }
 
-        PUT(DSB_STOR_OB); fprintf(outputFile, "G0 0\n");
+        PUT(DSB_STORWOB); fprintf(outputFile, "G0 0\n");
     }
-    PUT(DSB_BRAL);    fprintf(outputFile, "ret\n");
+    PUT(DSB_BRALPC); fprintf(outputFile, "ret\n");
 
     return true;
 }
@@ -649,15 +683,15 @@ static bool outputWhile(while_t *wle)
         return false;
     }
 
-    PUT(DSB_COMP); fprintf(outputFile, "G0 0\n");
-    PUT(DSB_BREQ); fprintf(outputFile, "__while_end_%u__\n", expressionId);
+    PUT(DSB_COMPI); fprintf(outputFile, "G0 0\n");
+    PUT(DSB_BREQPC); fprintf(outputFile, "__while_end_%u__\n", expressionId);
 
     if (false == outputStackFrame(&wle->loop))
     {
         return false;
     }
 
-    PUT(DSB_BRAL); fprintf(outputFile, "__while_top_%u__\n", expressionId);
+    PUT(DSB_BRALPC); fprintf(outputFile, "__while_top_%u__\n", expressionId);
 
     fprintf(outputFile, "    :__while_end_%u__\n", expressionId);
 
@@ -675,7 +709,7 @@ static bool outputStackFrame(stackFrame_t *sf)
     // Align SP
     if (sf->varSize > 0)
     {
-        PUT(DSB_ADD); fprintf(outputFile, "SP SP %u\n", sf->varSize);
+        PUT(DSB_ADDI); fprintf(outputFile, "SP SP %u\n", sf->varSize);
     }
 
     for (voidContainer_t *vc = sf->codeBlock.firstItem; vc != NULL; vc = vc->nextVoidContainer)
@@ -747,7 +781,7 @@ static bool outputStackFrame(stackFrame_t *sf)
         // deal with the SP. Also if this is a non-void function, this
         // should be inaccessable due to a return being required before
         // hitting the end of the root stack frame.
-        PUT(DSB_SUB); fprintf(outputFile, "SP SP %u\n", sf->varSize);
+        PUT(DSB_SUBI); fprintf(outputFile, "SP SP %u\n", sf->varSize);
     }
 
     return true;
@@ -782,9 +816,9 @@ static bool outputFunctions()
         // Check for stack overflow
         if (0 != strcmp(f->identifier, "_start"))
         {
-            PUT(DSB_ADD);  fprintf(outputFile, "G0 SP %u\n", f->definition.maxStackSize);
-            PUT(DSB_COMP); fprintf(outputFile, "G0 0xFFC0\n");
-            PUT(DSB_BRHS); fprintf(outputFile, "__STACK_OVERFLOW__\n");
+            PUT(DSB_ADDI);   fprintf(outputFile, "G0 SP %u\n", f->definition.maxStackSize);
+            PUT(DSB_COMPI);  fprintf(outputFile, "G0 0xFFC0\n");
+            PUT(DSB_BRHSPC); fprintf(outputFile, "__STACK_OVERFLOW__\n");
         }
 
         if (false == outputStackFrame(&f->definition))
@@ -802,7 +836,7 @@ static bool outputFunctions()
         }
         else
         {
-            PUT(DSB_SUB); fprintf(outputFile, "SP OB SB\n");
+            PUT(DSB_SUBI); fprintf(outputFile, "SP OB SB\n");
         }
         PUT(DSB_RETURN);
     }
