@@ -60,12 +60,26 @@ static bool outputExpressionInternal(expression_t *exp, uint8_t baseReg, bool fo
                     {
                         case 1:
                         {
-                            PUT(DSB_LOADCOA);
+                            if (isTypeSigned(&var->type))
+                            {
+                                PUT(DSB_LOADSCOA);
+                            }
+                            else
+                            {
+                                PUT(DSB_LOADCOA);
+                            }
                             break;
                         }
                         case 2:
                         {
-                            PUT(DSB_LOADHOA);
+                            if (isTypeSigned(&var->type))
+                            {
+                                PUT(DSB_LOADSHOA);
+                            }
+                            else
+                            {
+                                PUT(DSB_LOADHOA);
+                            }
                             break;
                         }
                         case 4:
@@ -89,12 +103,26 @@ static bool outputExpressionInternal(expression_t *exp, uint8_t baseReg, bool fo
                     {
                         case 1:
                         {
-                            PUT(DSB_LOADCOB);
+                            if (isTypeSigned(&var->type))
+                            {
+                                PUT(DSB_LOADSCOB);
+                            }
+                            else
+                            {
+                                PUT(DSB_LOADCOB);
+                            }
                             break;
                         }
                         case 2:
                         {
-                            PUT(DSB_LOADHOB);
+                            if (isTypeSigned(&var->type))
+                            {
+                                PUT(DSB_LOADSHOB);
+                            }
+                            else
+                            {
+                                PUT(DSB_LOADHOB);
+                            }
                             break;
                         }
                         case 4:
@@ -110,30 +138,6 @@ static bool outputExpressionInternal(expression_t *exp, uint8_t baseReg, bool fo
                     }
 
                     fprintf(outputFile, "G%hhu %u\n", baseReg, var->offsetInFunc);
-                }
-
-                // Sign extension for 8/16 bit signed numbers
-                if (isTypeSigned(&var->type) &&
-                    4 != var->type.size)
-                {
-                    unsigned int expressionId = ftell(outputFile);
-
-                    if (1 == var->type.size)
-                    {
-                        PUT(DSB_COMPI);  fprintf(outputFile, "G%hhu 0x80\n", baseReg);
-                        PUT(DSB_BRLOPC); fprintf(outputFile, "__skipSigExt_%u__\n", expressionId);
-                        PUT(DSB_NOT);    fprintf(outputFile, "G%hhu G%hhu\n", baseReg, baseReg);
-                        PUT(DSB_XOR);    fprintf(outputFile, "G%hhu G%hhu 0xFF\n", baseReg, baseReg);
-                    }
-                    else
-                    {
-                        PUT(DSB_COMPI);  fprintf(outputFile, "G%hhu 0x8000\n", baseReg);
-                        PUT(DSB_BRLOPC); fprintf(outputFile, "__skipSigExt_%u__\n", expressionId);
-                        PUT(DSB_NOT);    fprintf(outputFile, "G%hhu G%hhu\n", baseReg, baseReg);
-                        PUT(DSB_XOR);    fprintf(outputFile, "G%hhu G%hhu 0xFFFF\n", baseReg, baseReg);
-                    }
-
-                    fprintf(outputFile, "    :__skipSigExt_%u__\n", expressionId);
                 }
             }
             break;
@@ -279,8 +283,7 @@ static bool outputExpressionInternal(expression_t *exp, uint8_t baseReg, bool fo
                 case op_lessEqual_e:
                 case op_lessThan_e:
                 {
-                    bool         isSignedComparison = false;
-                    unsigned int statementId        = 0;
+                    bool isSignedComparison = false;
 
                     if (false == outputExpressionInternal(exp->contents.binary.operand1,
                                                           baseReg,
@@ -292,33 +295,29 @@ static bool outputExpressionInternal(expression_t *exp, uint8_t baseReg, bool fo
                         return false;
                     }
 
-                    statementId = ftell(outputFile);
-
                     if (isTypeSigned(&exp->contents.binary.operand1->resultingType) &&
                         isTypeSigned(&exp->contents.binary.operand2->resultingType))
                     {
                         isSignedComparison = true;
                     }
 
-                    PUT(DSB_COMPI);fprintf(outputFile, "G%hhu G%hhu\n", baseReg, baseReg + 1);
-
                     switch (exp->contents.binary.operation)
                     {
                         case op_equals_e:
-                        {PUT(DSB_BREQPC);break;}
+                        {PUT(DSB_EVALIEQ);break;}
 
                         case op_notEquals_e:
-                        {PUT(DSB_BRNEPC);break;}
+                        {PUT(DSB_EVALINE);break;}
                         
                         case op_greaterThan_e:
                         {
                             if (isSignedComparison)
                             {
-                                PUT(DSB_BRGTPC);
+                                PUT(DSB_EVALIGT);
                             }
                             else
                             {
-                                PUT(DSB_BRHIPC);
+                                PUT(DSB_EVALIHI);
                             }
                             break;
                         }
@@ -326,11 +325,11 @@ static bool outputExpressionInternal(expression_t *exp, uint8_t baseReg, bool fo
                         {
                             if (isSignedComparison)
                             {
-                                PUT(DSB_BRGEPC);
+                                PUT(DSB_EVALIGE);
                             }
                             else
                             {
-                                PUT(DSB_BRHSPC);
+                                PUT(DSB_EVALIHS);
                             }
                             break;
                         }
@@ -338,11 +337,11 @@ static bool outputExpressionInternal(expression_t *exp, uint8_t baseReg, bool fo
                         {
                             if (isSignedComparison)
                             {
-                                PUT(DSB_BRLEPC);
+                                PUT(DSB_EVALILE);
                             }
                             else
                             {
-                                PUT(DSB_BRLSPC);
+                                PUT(DSB_EVALILS);
                             }
                             break;
                         }
@@ -350,11 +349,11 @@ static bool outputExpressionInternal(expression_t *exp, uint8_t baseReg, bool fo
                         {
                             if (isSignedComparison)
                             {
-                                PUT(DSB_BRLTPC);
+                                PUT(DSB_EVALILT);
                             }
                             else
                             {
-                                PUT(DSB_BRLOPC);
+                                PUT(DSB_EVALILO);
                             }
                             break;
                         }
@@ -362,12 +361,7 @@ static bool outputExpressionInternal(expression_t *exp, uint8_t baseReg, bool fo
                         {INTERNAL_ERROR;return false;}
                     }
 
-                                     fprintf(outputFile, "__isTrue_%u__\n", statementId);
-                    PUT(DSB_MOVE);   fprintf(outputFile, "G%hhu 0\n", baseReg);
-                    PUT(DSB_BRALPC); fprintf(outputFile, "__wasFalse_%u__\n", statementId);
-                                     fprintf(outputFile, "    :__isTrue_%u__\n", statementId);
-                    PUT(DSB_MOVE);   fprintf(outputFile, "G%hhu 1\n", baseReg);
-                                     fprintf(outputFile, "    :__wasFalse_%u__\n", statementId);
+                    fprintf(outputFile, "G%hhu G%hhu G%hhu\n", baseReg, baseReg, baseReg + 1);
 
                     break;
                 }
@@ -444,6 +438,7 @@ static bool outputExpressionInternal(expression_t *exp, uint8_t baseReg, bool fo
             int           paramIndex     = 0;
             int           totalParamSize = 0;
             expression_t *e              = NULL;
+            type_t       *t              = NULL;
 
             for (e = exp->contents.functionCall.firstParam; NULL != e; e = e->next)
             {
@@ -465,15 +460,17 @@ static bool outputExpressionInternal(expression_t *exp, uint8_t baseReg, bool fo
             PUT(DSB_ADDI); fprintf(outputFile, "OC OC 4\n");
 
             e = exp->contents.functionCall.firstParam;
+            t = exp->contents.functionCall.function->parameterTypes.first;
             for (int pi = 0; pi < paramIndex; pi++)
             {
-                if (NULL == e)
+                if (NULL == e ||
+                    NULL == t)
                 {
                     INTERNAL_ERROR;
                     return false;
                 }
 
-                switch (e->resultingType.size)
+                switch (t->size)
                 {
                     case 1:
                     {
@@ -498,8 +495,9 @@ static bool outputExpressionInternal(expression_t *exp, uint8_t baseReg, bool fo
                     }
                 }
                 fprintf(outputFile, "G%hhu %d\n", baseReg + pi, totalParamSize);
-                totalParamSize += e->resultingType.size;
+                totalParamSize += t->size;
                 e = e->next;
+                t = t->next;
             }
 
             // Align OB
